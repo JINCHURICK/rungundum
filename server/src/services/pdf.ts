@@ -193,7 +193,7 @@ export async function generateRaidPDF(raid: any, club: any, options: PDFOptions 
     <div class="info-item"><span class="info-label">Capitão de Estrada:</span><span class="info-value">${leaderName}</span></div>
     <div class="info-item"><span class="info-label">Vel. máx. comboio:</span><span class="info-value">${raid.maxSpeed ? `${raid.maxSpeed} km/h` : '—'}</span></div>
     <div class="info-item"><span class="info-label">Canal rádio:</span><span class="info-value">${raid.communicationChannel ?? '—'}</span></div>
-    <div class="info-item"><span class="info-label">Tipo de estrada:</span><span class="info-value">${(raid.roadTypes ?? []).join(', ') || '—'}</span></div>
+    <div class="info-item"><span class="info-label">Tipo de estrada:</span><span class="info-value">${((raid.roadTypes as string[]) ?? []).join(', ') || '—'}</span></div>
     ${raid.accommodation ? `<div class="info-item"><span class="info-label">Alojamento:</span><span class="info-value">${raid.accommodation}</span></div>` : ''}
   </div>
   ${raid.description ? `<p style="margin-top:10px;font-size:9pt;color:#555;line-height:1.5">${raid.description}</p>` : ''}

@@ -3,9 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "mysql"
+  url      = env("DATABASE_URL")
 }
 
 model Club {
@@ -15,12 +14,12 @@ model Club {
   location        String
   country         String          @default("AO")
   foundedAt       DateTime?
-  motto           String?
+  motto           String?  @db.Text
   website         String?
   logoUrl         String?
   secondLogoUrl   String?
   accentColor     String          @default("#dc2626")
-  statutesText    String?
+  statutesText    String?  @db.Text
   statutesVersion String?
   statutesDate    DateTime?
   defaultSettings Json            @default("{}")
@@ -117,7 +116,7 @@ model Member {
   licenseNumber    String?
   licenseExpiresAt DateTime?
   joinedAt         DateTime     @default(now())
-  notes            String?
+  notes            String?  @db.Text
   inviteToken      String?      @unique
   inviteExpiresAt  DateTime?
   createdAt        DateTime     @default(now())
@@ -167,8 +166,8 @@ model Raid {
   difficulty        Difficulty   @default(MEDIUM)
   estimatedKm       Float?
   estimatedDuration String?
-  roadTypes         String[]     @default([])
-  description       String?
+  roadTypes         Json         @default("[]")
+  description       String?  @db.Text
   maxSpeed          Int?
   communicationChannel String?
   accommodation     String?
@@ -258,10 +257,10 @@ model ChecklistItem {
 model ContingencyPlan {
   id             String   @id @default(cuid())
   raidId         String   @unique
-  accidentText   String?
-  breakdownText  String?
-  separationText String?
-  weatherText    String?
+  accidentText   String?  @db.Text
+  breakdownText  String?  @db.Text
+  separationText String?  @db.Text
+  weatherText    String?  @db.Text
   rallyPoint     String?
   contactsJson   Json     @default("[]")
   createdAt      DateTime @default(now())
@@ -530,10 +529,10 @@ model DisciplinaryProcess {
   clubId      String
   memberId    String
   title       String
-  description String?
+  description String?  @db.Text
   severity    DisciplinarySeverity @default(MINOR)
   status      DisciplinaryStatus   @default(OPEN)
-  outcome     String?
+  outcome     String?  @db.Text
   createdById String
   closedAt    DateTime?
   createdAt   DateTime             @default(now())
@@ -552,12 +551,12 @@ model Suspension {
   clubId      String
   memberId    String
   processId   String?
-  reason      String
+  reason      String   @db.Text
   startDate   DateTime
   endDate     DateTime
   liftedAt    DateTime?
   createdById String
-  notes       String?
+  notes       String?  @db.Text
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -573,7 +572,7 @@ model Fine {
   clubId      String
   memberId    String
   processId   String?
-  reason      String
+  reason      String   @db.Text
   amount      Float
   status      FineStatus @default(PENDING)
   paidAt      DateTime?
@@ -613,7 +612,7 @@ model Transaction {
   type          TransactionType
   category      String
   amount        Float
-  description   String
+  description   String   @db.Text
   reference     String?
   date          DateTime        @default(now())
   memberId      String?
@@ -639,7 +638,7 @@ model Announcement {
   id          String   @id @default(cuid())
   clubId      String
   title       String
-  body        String
+  body        String   @db.Text
   pinned      Boolean  @default(false)
   createdById String
   createdAt   DateTime @default(now())
@@ -656,7 +655,7 @@ model Notification {
   userId    String
   type      String
   title     String
-  body      String?
+  body      String?  @db.Text
   link      String?
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
