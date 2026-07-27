@@ -58,7 +58,7 @@ app.use(globalLimiter)
 // Em produção, usar Cloudinary que tem controlo de acesso próprio
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')))
 
-app.get('/health', (_, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }))
+app.get('/health', (_, res) => res.json({ status: 'ok', version: '1.0.1', timestamp: new Date().toISOString() }))
 
 app.use('/api/auth', authRoutes)
 app.use('/api/clubs', clubRoutes)
