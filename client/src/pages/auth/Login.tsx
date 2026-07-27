@@ -9,7 +9,7 @@ import axios from 'axios'
 import { useAuthStore } from '@/store/auth'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { Bike, Mail } from 'lucide-react'
+import { Mail } from 'lucide-react'
 
 const schema = z.object({
   email: z.string().email('Email inválido'),

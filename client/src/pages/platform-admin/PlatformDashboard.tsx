@@ -2,7 +2,6 @@
 import { Link } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
-import { formatShortDate } from '@/lib/utils'
 import { Building2, Users, Map, Clock, AlertTriangle, ArrowRight, Bell } from 'lucide-react'
 
 const PLAN_LABELS: Record<string, string> = {
