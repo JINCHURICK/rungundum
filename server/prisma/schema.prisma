@@ -1,0 +1,686 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Club {
+  id              String          @id @default(cuid())
+  name            String
+  acronym         String
+  location        String
+  country         String          @default("AO")
+  foundedAt       DateTime?
+  motto           String?
+  website         String?
+  logoUrl         String?
+  secondLogoUrl   String?
+  accentColor     String          @default("#dc2626")
+  statutesText    String?
+  statutesVersion String?
+  statutesDate    DateTime?
+  defaultSettings Json            @default("{}")
+  plan            ClubPlan        @default(FREE)
+  planStatus      ClubPlanStatus  @default(TRIAL)
+  trialEndsAt     DateTime?
+  planExpiresAt   DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  members               Member[]
+  raids                 Raid[]
+  emergencyContacts     EmergencyContact[]
+  users                 User[]
+  leagueEntries         LeagueEntry[]
+  subscriptionRequests  SubscriptionRequest[]
+  subscription          Subscription?
+  disciplinaryProcesses DisciplinaryProcess[]
+  suspensions           Suspension[]
+  fines                 Fine[]
+  transactions          Transaction[]
+  announcements         Announcement[]
+  positions             ClubPosition[]
+
+  @@map("clubs")
+}
+
+model User {
+  id                   String    @id @default(cuid())
+  clubId               String
+  email                String    @unique
+  passwordHash         String
+  role                 UserRole  @default(MEMBER)
+  emailVerified        Boolean   @default(false)
+  platformAdmin        Boolean   @default(false)
+  verificationToken    String?   @unique
+  verificationExpires  DateTime?
+  resetToken           String?   @unique
+  resetTokenExpiresAt  DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  club          Club          @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  member        Member?
+  refreshTokens RefreshToken[]
+  pendingAuth   PendingAuth?
+  uploadedPhotos RaidPhoto[]
+  notifications  Notification[]
+
+  @@map("users")
+}
+
+model PendingAuth {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  code      String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("pending_auth")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model Member {
+  id               String       @id @default(cuid())
+  clubId           String
+  userId           String?      @unique
+  memberNumber     String?
+  fullName         String
+  nickname         String?
+  phone            String?
+  emergencyContact String?
+  emergencyPhone   String?
+  status           MemberStatus @default(ACTIVE)
+  photoUrl         String?
+  address          String?
+  birthDate        DateTime?
+  biNumber         String?
+  bloodType        String?
+  licenseNumber    String?
+  licenseExpiresAt DateTime?
+  joinedAt         DateTime     @default(now())
+  notes            String?
+  inviteToken      String?      @unique
+  inviteExpiresAt  DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  club         Club          @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user         User?         @relation(fields: [userId], references: [id])
+  vehicles     Vehicle[]
+  participations Participant[]
+  quotas       MemberQuota[]
+  disciplinaryProcesses DisciplinaryProcess[]
+  suspensions  Suspension[]
+  fines        Fine[]
+  transactions Transaction[]
+  positions    ClubPosition[]
+
+  @@map("members")
+}
+
+model Vehicle {
+  id           String      @id @default(cuid())
+  memberId     String
+  brand        String
+  model        String
+  year         Int?
+  plate        String?
+  type         VehicleType @default(TRAIL)
+  displacement Int?
+  photoUrl     String?
+  notes        String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  member       Member        @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  participations Participant[]
+
+  @@map("vehicles")
+}
+
+model Raid {
+  id                String       @id @default(cuid())
+  clubId            String
+  title             String
+  date              DateTime
+  origin            String
+  destination       String
+  difficulty        Difficulty   @default(MEDIUM)
+  estimatedKm       Float?
+  estimatedDuration String?
+  roadTypes         String[]     @default([])
+  description       String?
+  maxSpeed          Int?
+  communicationChannel String?
+  accommodation     String?
+  accommodationContact String?
+  status            RaidStatus   @default(DRAFT)
+  publicToken       String?      @unique
+  settings          Json         @default("{}")
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  club              Club              @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  routePoints       RoutePoint[]
+  participants      Participant[]
+  contingencyPlan   ContingencyPlan?
+  photos            RaidPhoto[]
+
+  @@map("raids")
+}
+
+model RaidPhoto {
+  id           String   @id @default(cuid())
+  raidId       String
+  url          String
+  caption      String?
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  raid     Raid @relation(fields: [raidId], references: [id], onDelete: Cascade)
+  uploader User @relation(fields: [uploadedById], references: [id])
+
+  @@map("raid_photos")
+}
+
+model RoutePoint {
+  id            String          @id @default(cuid())
+  raidId        String
+  order         Int
+  name          String
+  type          RoutePointType  @default(STOP)
+  scheduledDate String?
+  scheduledTime String?
+  kmAccumulated Float?
+  stopDuration  Int?
+  notes         String?
+  createdAt     DateTime        @default(now())
+
+  raid Raid @relation(fields: [raidId], references: [id], onDelete: Cascade)
+
+  @@map("route_points")
+}
+
+model Participant {
+  id                  String            @id @default(cuid())
+  raidId              String
+  memberId            String
+  vehicleId           String?
+  role                ParticipantRole   @default(MEMBER)
+  status              ParticipantStatus @default(PENDING)
+  confirmedAt         DateTime?
+  checklistCompletedAt DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  raid          Raid           @relation(fields: [raidId], references: [id], onDelete: Cascade)
+  member        Member         @relation(fields: [memberId], references: [id])
+  vehicle       Vehicle?       @relation(fields: [vehicleId], references: [id])
+  checklistItems ChecklistItem[]
+
+  @@unique([raidId, memberId])
+  @@map("participants")
+}
+
+model ChecklistItem {
+  id            String   @id @default(cuid())
+  participantId String
+  category      String
+  label         String
+  checked       Boolean  @default(false)
+  checkedAt     DateTime?
+  createdAt     DateTime @default(now())
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@map("checklist_items")
+}
+
+model ContingencyPlan {
+  id             String   @id @default(cuid())
+  raidId         String   @unique
+  accidentText   String?
+  breakdownText  String?
+  separationText String?
+  weatherText    String?
+  rallyPoint     String?
+  contactsJson   Json     @default("[]")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  raid Raid @relation(fields: [raidId], references: [id], onDelete: Cascade)
+
+  @@map("contingency_plans")
+}
+
+model EmergencyContact {
+  id        String   @id @default(cuid())
+  clubId    String
+  region    String
+  name      String
+  role      String
+  phone     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@map("emergency_contacts")
+}
+
+model MemberQuota {
+  id            String    @id @default(cuid())
+  memberId      String
+  member        Member    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  year          Int
+  dueAmount     Float     @default(0)
+  monthsPaid    Int       @default(0)
+  paidAmount    Float     @default(0)
+  paidAt        DateTime?
+  confirmedById String?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  payments       QuotaPayment[]
+  lastAlertLevel Int?
+  lastAlertAt    DateTime?
+
+  @@unique([memberId, year])
+  @@map("member_quotas")
+}
+
+model QuotaPayment {
+  id            String      @id @default(cuid())
+  quotaId       String
+  amount        Float
+  monthsCount   Int         @default(1)
+  paymentMethod String?
+  reference     String?
+  notes         String?
+  paidAt        DateTime    @default(now())
+  confirmedById String
+  createdAt     DateTime    @default(now())
+
+  quota MemberQuota @relation(fields: [quotaId], references: [id], onDelete: Cascade)
+
+  @@map("quota_payments")
+}
+
+model League {
+  id             String       @id @default(cuid())
+  name           String
+  year           Int
+  region         String?
+  description    String?
+  status         LeagueStatus @default(ACTIVE)
+  pointsPerRaid  Int          @default(100)
+  bonusKmPoints  Float        @default(0.1)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  entries LeagueEntry[]
+
+  @@map("leagues")
+}
+
+model LeagueEntry {
+  id             String   @id @default(cuid())
+  leagueId       String
+  league         League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  clubId         String
+  club           Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  points         Int      @default(0)
+  raidsCompleted Int      @default(0)
+  totalKm        Float    @default(0)
+  lastUpdated    DateTime @default(now())
+
+  @@unique([leagueId, clubId])
+  @@map("league_entries")
+}
+
+enum ClubPlan {
+  FREE
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum ClubPlanStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+enum LeagueStatus {
+  ACTIVE
+  FINISHED
+}
+
+enum UserRole {
+  ADMIN           // Presidente — acesso total
+  VICE_PRESIDENT  // Vice-Presidente — tudo excepto config do clube e subscrição
+  TREASURER       // Tesoureiro — tesouraria, quotas, SMS
+  SECRETARY       // Secretário — membros, comunicados, cargos, SMS
+  PR              // Relações Públicas — comunicados, SMS
+  DISCIPLINA      // Responsável de Disciplina — módulo disciplinar, leitura de membros
+  CAPTAIN         // Capitão — raids, membros
+  MEMBER          // Membro regular
+  GUEST           // Convidado
+}
+
+enum MemberStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  GUEST
+}
+
+enum VehicleType {
+  TRAIL
+  ROAD
+  CUSTOM
+  SCOOTER
+  SUPPORT
+  OTHER
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum RaidStatus {
+  DRAFT
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum RoutePointType {
+  DEPARTURE
+  ARRIVAL
+  STOP
+  TECH_STOP
+  LUNCH
+  BREAKFAST
+  FUEL
+  COFFEE
+  OVERNIGHT
+  SCENIC
+  BORDER
+}
+
+enum ParticipantRole {
+  LEADER
+  TAIL
+  MEMBER
+  MECHANIC
+  SUPPORT
+}
+
+enum ParticipantStatus {
+  PENDING
+  CONFIRMED
+  DECLINED
+}
+
+// ── Planos e Subscrições (novo sistema) ───────────────────────────────────────
+
+model Plan {
+  id             String         @id @default(cuid())
+  code           String         @unique
+  name           String
+  priceMonthlyKz Int
+  priceAnnualKz  Int
+  memberLimit    Int?
+  isActive       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+
+  subscriptions  Subscription[]
+
+  @@map("plans")
+}
+
+enum BillingCycle {
+  MONTHLY
+  ANNUAL
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+}
+
+model Subscription {
+  id                 String             @id @default(cuid())
+  clubId             String             @unique
+  planId             String
+  billingCycle       BillingCycle       @default(MONTHLY)
+  status             SubscriptionStatus @default(TRIAL)
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  paymentReference   String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  club               Club               @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  plan               Plan               @relation(fields: [planId], references: [id])
+
+  @@map("subscriptions")
+}
+
+model SubscriptionRequest {
+  id            String        @id @default(cuid())
+  clubId        String
+  club          Club          @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  requestedPlan String
+  currentPlan   String
+  requestedBy   String
+  status        RequestStatus @default(PENDING)
+  reviewNotes   String?
+  reviewedAt    DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@map("subscription_requests")
+}
+
+model PlatformSettings {
+  id          String   @id @default("singleton")
+  planConfigs Json     @default("[]")
+  updatedAt   DateTime @updatedAt
+
+  @@map("platform_settings")
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model DisciplinaryProcess {
+  id          String               @id @default(cuid())
+  clubId      String
+  memberId    String
+  title       String
+  description String?
+  severity    DisciplinarySeverity @default(MINOR)
+  status      DisciplinaryStatus   @default(OPEN)
+  outcome     String?
+  createdById String
+  closedAt    DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  club        Club         @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  member      Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  fines       Fine[]
+  suspensions Suspension[]
+
+  @@map("disciplinary_processes")
+}
+
+model Suspension {
+  id          String    @id @default(cuid())
+  clubId      String
+  memberId    String
+  processId   String?
+  reason      String
+  startDate   DateTime
+  endDate     DateTime
+  liftedAt    DateTime?
+  createdById String
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  club    Club                 @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  member  Member               @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  process DisciplinaryProcess? @relation(fields: [processId], references: [id])
+
+  @@map("suspensions")
+}
+
+model Fine {
+  id          String     @id @default(cuid())
+  clubId      String
+  memberId    String
+  processId   String?
+  reason      String
+  amount      Float
+  status      FineStatus @default(PENDING)
+  paidAt      DateTime?
+  createdById String
+  notes       String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  club    Club                 @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  member  Member               @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  process DisciplinaryProcess? @relation(fields: [processId], references: [id])
+
+  @@map("fines")
+}
+
+enum DisciplinaryStatus {
+  OPEN
+  REVIEWING
+  CLOSED
+}
+
+enum DisciplinarySeverity {
+  MINOR
+  MODERATE
+  SERIOUS
+}
+
+enum FineStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+model Transaction {
+  id            String          @id @default(cuid())
+  clubId        String
+  type          TransactionType
+  category      String
+  amount        Float
+  description   String
+  reference     String?
+  date          DateTime        @default(now())
+  memberId      String?
+  createdById   String
+  notes         String?
+  autoGenerated Boolean         @default(false)
+  sourceRef     String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  club   Club    @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  member Member? @relation(fields: [memberId], references: [id])
+
+  @@map("transactions")
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+model Announcement {
+  id          String   @id @default(cuid())
+  clubId      String
+  title       String
+  body        String
+  pinned      Boolean  @default(false)
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@map("announcements")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  clubId    String
+  userId    String
+  type      String
+  title     String
+  body      String?
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([clubId])
+  @@map("notifications")
+}
+
+model ClubPosition {
+  id        String    @id @default(cuid())
+  clubId    String
+  memberId  String
+  title     String
+  startDate DateTime
+  endDate   DateTime?
+  isCurrent Boolean   @default(true)
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  club   Club   @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@map("club_positions")
+}

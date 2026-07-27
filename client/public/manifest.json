@@ -1,0 +1,19 @@
+﻿{
+  "name": "Rungundum",
+  "short_name": "Rungundum",
+  "description": "A plataforma para gestão de motocubes",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#dc2626",
+  "orientation": "portrait-primary",
+  "lang": "pt",
+  "icons": [
+    {
+      "src": "/logo-branco.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

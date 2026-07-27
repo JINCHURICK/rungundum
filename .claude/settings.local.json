@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/Daniel Viegas/.claude/projects/c--Users-Daniel-Viegas-Documents-Sistema-de-Gerenciamento-de-Raids/memory/**)",
+      "Bash(npm install *)",
+      "Bash(npx prisma *)",
+      "Bash(npx tsc *)",
+      "Bash(npx dotenv *)",
+      "Bash(set DATABASE_URL=postgresql://postgres:54585652@localhost:5432/raidmanager)",
+      "PowerShell(Set-Location \"c:\\\\Users\\\\Daniel Viegas\\\\Documents\\\\Sistema de Gerenciamento de Raids\\\\server\"; Start-Process powershell -ArgumentList \"-NoExit\", \"-Command\", \"Set-Location 'c:\\\\Users\\\\Daniel Viegas\\\\Documents\\\\Sistema de Gerenciamento de Raids\\\\server'; npm run dev\" -WindowStyle Normal)",
+      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:3001/health\" -TimeoutSec 5 -ErrorAction SilentlyContinue)",
+      "Bash(del \"c:\\\\Users\\\\Daniel Viegas\\\\Documents\\\\Sistema de Gerenciamento de Raids\\\\client\\\\src\\\\components\\\\layout\\\\BottomNav.tsx\")",
+      "Bash(ipconfig)",
+      "PowerShell(New-NetFirewallRule -DisplayName \"RaidManager - Vite \\(5173\\)\" -Direction Inbound -Protocol TCP -LocalPort 5173 -Action Allow -ErrorAction SilentlyContinue)",
+      "PowerShell(New-NetFirewallRule -DisplayName \"RaidManager - API \\(3001\\)\" -Direction Inbound -Protocol TCP -LocalPort 3001 -Action Allow -ErrorAction SilentlyContinue)",
+      "Bash(curl -s http://localhost:3001/health)",
+      "Bash(curl -s -X POST http://localhost:3001/api/auth/login -H \"Content-Type: application/json\" -d \"{\\\\\"email\\\\\":\\\\\"danielmotaviegas@gmail.com\\\\\",\\\\\"password\\\\\":\\\\\"123456\\\\\"}\")",
+      "Bash(node -e ' *)",
+      "Bash(curl -s -X POST http://localhost:3001/api/auth/login -H \"Content-Type: application/json\" -d \"{\\\\\"email\\\\\":\\\\\"daniel.viegas@papisdotrilho.ao\\\\\",\\\\\"password\\\\\":\\\\\"admin123\\\\\"}\")",
+      "Bash(curl -s -X POST http://localhost:3001/api/auth/login -H \"Content-Type: application/json\" -d \"{\\\\\"email\\\\\":\\\\\"admin@motoclubedemo.pt\\\\\",\\\\\"password\\\\\":\\\\\"admin123\\\\\"}\")",
+      "Bash(curl -s http://localhost:3001/api/raids/cmpo665m5000yeypvzygrrih6 -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbXBtcWNkb2kwMDAxZm5meGExdHgzcHp3IiwiY2x1YklkIjoic2VlZC1jbHViLTAwMSIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc3OTg5MjU5OCwiZXhwIjoxNzc5OTc4OTk4fQ.VvoOYNF2i2bBtSgxmfCRAIk6vpjdQ46GUDM5M7GLzUA')",
+      "Bash(node seed-angola.js)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\Daniel Viegas\\.claude\\projects\\c--Users-Daniel-Viegas-Documents-Sistema-de-Gerenciamento-de-Raids\\memory"
+    ]
+  }
+}
