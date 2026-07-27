@@ -48,8 +48,8 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       ...(status ? { status } : {}),
       ...(search ? {
         OR: [
-          { fullName: { contains: search, mode: 'insensitive' } },
-          { nickname: { contains: search, mode: 'insensitive' } },
+          { fullName: { contains: search } },
+          { nickname: { contains: search } },
         ],
       } : {}),
     },
