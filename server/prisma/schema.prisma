@@ -1,11 +1,10 @@
 generator client {
-  provider      = "prisma-client-js"
-  engineType    = "binary"
-  binaryTargets = ["native", "debian-openssl-1.1.x"]
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -168,7 +167,7 @@ model Raid {
   difficulty        Difficulty   @default(MEDIUM)
   estimatedKm       Float?
   estimatedDuration String?
-  roadTypes         Json         @default("[]")
+  roadTypes         String[]     @default([])
   description       String?  @db.Text
   maxSpeed          Int?
   communicationChannel String?

@@ -72,9 +72,9 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       ...dateFilter,
       ...(search ? {
         OR: [
-          { title: { contains: search } },
-          { origin: { contains: search } },
-          { destination: { contains: search } },
+          { title: { contains: search, mode: 'insensitive' } },
+          { origin: { contains: search, mode: 'insensitive' } },
+          { destination: { contains: search, mode: 'insensitive' } },
         ],
       } : {}),
     },
