@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { sendQuotaReminderSms } from './sms'
 import { sendQuotaAlertEmail } from './email'
@@ -207,7 +208,7 @@ export async function saveAlertConfig(clubId: string, cfg: QuotaAlertConfig): Pr
   const s    = (club?.defaultSettings ?? {}) as Record<string, any>
   await prisma.club.update({
     where: { id: clubId },
-    data:  { defaultSettings: { ...s, quotaAlertConfig: cfg } },
+    data:  { defaultSettings: { ...s, quotaAlertConfig: cfg as unknown as Prisma.InputJsonValue } },
   })
 }
 
