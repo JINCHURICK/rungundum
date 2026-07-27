@@ -1,14 +1,18 @@
 ﻿import nodemailer from 'nodemailer'
 
-const GMAIL_USER = process.env.GMAIL_USER   // danielmotaviegas@gmail.com
-const GMAIL_PASS = process.env.GMAIL_PASS   // App Password do Google (16 chars)
+const SMTP_HOST = process.env.SMTP_HOST
+const SMTP_PORT = parseInt(process.env.SMTP_PORT ?? '465', 10)
+const SMTP_USER = process.env.SMTP_USER
+const SMTP_PASS = process.env.SMTP_PASS
 
-const FROM = GMAIL_USER ? `Rungundum <${GMAIL_USER}>` : 'Rungundum <noreply@raidmanager.app>'
+const FROM = SMTP_USER ? `Rungundum <${SMTP_USER}>` : 'Rungundum <noreply@rungundum.com>'
 
-const transporter = GMAIL_USER && GMAIL_PASS
+const transporter = SMTP_HOST && SMTP_USER && SMTP_PASS
   ? nodemailer.createTransport({
-      service: 'gmail',
-      auth: { user: GMAIL_USER, pass: GMAIL_PASS },
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_PORT === 465,
+      auth: { user: SMTP_USER, pass: SMTP_PASS },
     })
   : null
 
