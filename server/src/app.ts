@@ -30,6 +30,10 @@ import { runQuotaAlerts } from './services/quotaAlerts'
 
 const app = express()
 
+// Hostinger (e qualquer hosting com reverse proxy) envia X-Forwarded-For
+// sem isto o express-rate-limit lança ValidationError em cada pedido
+app.set('trust proxy', 1)
+
 // Security headers
 app.use(helmet({
   contentSecurityPolicy: false, // CSP gerido pelo frontend (Vite)
