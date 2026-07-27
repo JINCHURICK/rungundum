@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
-import { Gavel, ShieldOff, Banknote, Plus, ChevronDown, Check, X, AlertTriangle, Clock } from 'lucide-react'
+import { Gavel, ShieldOff, Banknote, Plus, Check, X, AlertTriangle, Clock } from 'lucide-react'
 
 // ─── tipos ───────────────────────────────────────────────────────────────────
 

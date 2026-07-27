@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
-import { Badge } from '@/components/ui/Badge'
 import { formatShortDate } from '@/lib/utils'
 import { Shield, Users, Map, Calendar, ChevronDown } from 'lucide-react'
 

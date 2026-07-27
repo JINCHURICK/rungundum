@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { formatShortDate } from '@/lib/utils'
-import { Search, AlertTriangle, Clock, CheckCircle, XCircle, ArrowRight, Filter } from 'lucide-react'
+import { Search, AlertTriangle, Clock, CheckCircle, XCircle, ArrowRight } from 'lucide-react'
 
 const PLAN_OPTIONS = ['FREE', 'STARTER', 'PRO', 'ENTERPRISE'] as const
 const STATUS_OPTIONS = ['TRIAL', 'ACTIVE', 'PAST_DUE', 'CANCELLED', 'EXPIRED'] as const

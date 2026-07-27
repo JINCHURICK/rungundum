@@ -1,6 +1,6 @@
 ﻿import { useState } from 'react'
 import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Building2, CreditCard, Shield, LogOut, Menu, X, ChevronLeft, Bell, Settings2 } from 'lucide-react'
+import { LayoutDashboard, Building2, CreditCard, LogOut, Menu, X, ChevronLeft, Bell, Settings2 } from 'lucide-react'
 import { useAuthStore } from '@/store/auth'
 import { cn } from '@/lib/utils'
 import { api } from '@/lib/api'
@@ -52,7 +52,7 @@ function PlatformSidebar({ onNavigate }: { onNavigate?: () => void }) {
               )
             }
           >
-            {({ isActive }) => (
+            {() => (
               <>
                 <Icon size={17} className="flex-shrink-0" />
                 <span>{label}</span>

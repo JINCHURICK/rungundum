@@ -92,7 +92,7 @@ export default function Subscription() {
   const sub        = data?.subscription
   const plans      = data?.plans ?? []
   const current    = sub?.plan
-  const limit      = data?.memberLimit
+  const limit      = data?.memberLimit ?? null
   const active     = data?.activeMembers ?? 0
   const usage      = data?.usagePercent ?? 0
   const status     = sub?.status ?? 'TRIAL'

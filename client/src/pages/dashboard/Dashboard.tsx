@@ -26,9 +26,9 @@ export default function Dashboard() {
 
   const { data: subData } = useQuery({
     queryKey: ['subscription-current'],
-    queryFn:  () => api.get('/subscriptions/current').then(r => r.data),
+    queryFn:  () => api.get('/subscriptions/current').then(r => r.data as any),
     enabled:  isAdmin,
-  } as any)
+  })
 
   const upcomingRaids = raids.filter((r: any) => ['CONFIRMED', 'IN_PROGRESS'].includes(r.status))
   const completedRaids = raids.filter((r: any) => r.status === 'COMPLETED')

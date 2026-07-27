@@ -6,7 +6,7 @@ import { api } from '@/lib/api'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { formatShortDate, formatDate } from '@/lib/utils'
+import { formatShortDate } from '@/lib/utils'
 import { ChevronLeft, MapPin, Globe, Users, Map, Calendar, CreditCard, CheckCircle, XCircle } from 'lucide-react'
 
 const PLAN_OPTIONS = ['FREE', 'STARTER', 'PRO', 'ENTERPRISE'] as const
