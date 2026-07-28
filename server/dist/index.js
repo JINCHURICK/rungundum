@@ -3,19 +3,18 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+require("./prisma-patch"); // MUST be first — patches Prisma before any Prisma code is loaded
 require("./env");
 const app_1 = __importDefault(require("./app"));
 const prisma_1 = require("./lib/prisma");
 const socketPath = process.env.LSNODE_SOCKET;
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
-// Safety net: if Prisma's Rust engine panics despite the warmup delay,
-// recreate the client instead of crashing the process.
 function isPrismaPanic(err) {
     return err?.name === 'PrismaClientRustPanicError';
 }
 process.on('unhandledRejection', (reason) => {
     if (isPrismaPanic(reason)) {
-        console.error('Prisma panic (unhandledRejection) — recreating client');
+        console.error('[panic] Prisma engine panic (unhandledRejection) — recreating client');
         (0, prisma_1.recreatePrismaClient)();
         return;
     }
@@ -24,7 +23,7 @@ process.on('unhandledRejection', (reason) => {
 });
 process.on('uncaughtException', (err) => {
     if (isPrismaPanic(err)) {
-        console.error('Prisma panic (uncaughtException) — recreating client');
+        console.error('[panic] Prisma engine panic (uncaughtException) — recreating client');
         (0, prisma_1.recreatePrismaClient)();
         return;
     }
