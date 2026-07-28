@@ -1,10 +1,9 @@
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["driverAdapters"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -167,7 +166,7 @@ model Raid {
   difficulty        Difficulty   @default(MEDIUM)
   estimatedKm       Float?
   estimatedDuration String?
-  roadTypes         String[]     @default([])
+  roadTypes         Json         @default("[]")
   description       String?  @db.Text
   maxSpeed          Int?
   communicationChannel String?

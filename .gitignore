@@ -1,6 +1,7 @@
 node_modules/
-dist/
 build/
+# dist (client e server) incluído no git para evitar build no servidor (Hostinger shared hosting)
+
 .env
 .env.local
 .env.production
