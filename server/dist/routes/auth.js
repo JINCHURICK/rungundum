@@ -78,13 +78,18 @@ router.post('/register', async (req, res) => {
         const verificationToken = (0, crypto_1.randomBytes)(32).toString('hex');
         const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
         const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 dias de trial
-        // PrismaNeonHTTP (HTTP adapter) não suporta transacções interactivas —
-        // usamos queries sequenciais; falhas parciais são raras e recuperáveis
+        // PrismaNeonHTTP: misturar DateTime + Json no mesmo create() causa serialização
+        // incorrecta do Date (bug do adapter) — separamos em dois passos
         const club = await prisma_1.prisma.club.create({
             data: {
                 name: data.clubName, acronym: data.clubAcronym, location: data.clubLocation,
                 planStatus: 'TRIAL',
                 trialEndsAt,
+            },
+        });
+        await prisma_1.prisma.club.update({
+            where: { id: club.id },
+            data: {
                 defaultSettings: {
                     maxSpeed: 90, minDistance: 3, radioChannel: 'PMR446 Canal 6',
                     contingency: {
