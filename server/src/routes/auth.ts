@@ -132,11 +132,11 @@ router.post('/register', async (req: Request, res: Response) => {
     }).catch(() => {})
 
     const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5173'
-    await sendEmailVerification({
+    sendEmailVerification({
       to: data.email,
       clubName: data.clubName,
       verifyUrl: `${clientUrl}/verify-email/${verificationToken}`,
-    })
+    }).catch(err => console.error('[Email verify]', err.message))
 
     return res.status(201).json({ requiresVerification: true, email: data.email })
   } catch (err) {
