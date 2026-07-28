@@ -6,6 +6,7 @@ const prisma_1 = require("../lib/prisma");
 const auth_1 = require("../middleware/auth");
 const plans_1 = require("../lib/plans");
 const plan_cache_1 = require("../lib/plan-cache");
+const prisma_2 = require("../lib/prisma");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate, auth_1.requirePlatformAdmin);
 function clubTrialDaysLeft(trialEndsAt) {
@@ -277,13 +278,20 @@ router.put('/plan-configs', async (req, res) => {
             features: zod_1.z.array(zod_1.z.string()).default([]),
             pricingTiers: zod_1.z.array(pricingTierSchema).default([]),
         })).parse(req.body);
-        const settings = await prisma_1.prisma.platformSettings.upsert({
+        // Escrever ficheiro de cache PRIMEIRO — o endpoint público lê deste ficheiro
+        // e deve funcionar mesmo que o Prisma tenha problemas
+        (0, plan_cache_1.writePlanCache)(configs);
+        // Persistir na BD de forma assíncrona — não bloqueia a resposta
+        prisma_1.prisma.platformSettings.upsert({
             where: { id: 'singleton' },
             create: { id: 'singleton', planConfigs: configs },
             update: { planConfigs: configs },
+        }).catch((err) => {
+            if (err?.name === 'PrismaClientRustPanicError')
+                (0, prisma_2.recreatePrismaClient)();
+            console.error('[plan-configs] DB save failed:', err?.message ?? err);
         });
-        (0, plan_cache_1.writePlanCache)(configs);
-        return res.json(settings.planConfigs);
+        return res.json(configs);
     }
     catch (err) {
         if (err instanceof zod_1.z.ZodError)

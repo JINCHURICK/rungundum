@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma'
 import { authenticate, requirePlatformAdmin, AuthRequest } from '../middleware/auth'
 import { PLAN_LABELS, PLAN_LIMITS, PLAN_PRICES, type PlanKey } from '../lib/plans'
 import { writePlanCache } from '../lib/plan-cache'
+import { recreatePrismaClient } from '../lib/prisma'
 
 const router = Router()
 router.use(authenticate, requirePlatformAdmin)
@@ -283,14 +284,21 @@ router.put('/plan-configs', async (req: AuthRequest, res: Response) => {
       pricingTiers:       z.array(pricingTierSchema).default([]),
     })).parse(req.body)
 
-    const settings = await prisma.platformSettings.upsert({
+    // Escrever ficheiro de cache PRIMEIRO — o endpoint público lê deste ficheiro
+    // e deve funcionar mesmo que o Prisma tenha problemas
+    writePlanCache(configs)
+
+    // Persistir na BD de forma assíncrona — não bloqueia a resposta
+    prisma.platformSettings.upsert({
       where: { id: 'singleton' },
       create: { id: 'singleton', planConfigs: configs },
       update: { planConfigs: configs },
+    }).catch((err: any) => {
+      if (err?.name === 'PrismaClientRustPanicError') recreatePrismaClient()
+      console.error('[plan-configs] DB save failed:', err?.message ?? err)
     })
 
-    writePlanCache(configs)
-    return res.json(settings.planConfigs)
+    return res.json(configs)
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors })
     throw err

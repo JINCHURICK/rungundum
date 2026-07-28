@@ -4,7 +4,8 @@ import { z } from 'zod'
 import { randomBytes, randomInt, timingSafeEqual } from 'crypto'
 import rateLimit from 'express-rate-limit'
 import { prisma } from '../lib/prisma'
-import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../lib/jwt'
+import { signAccessToken, signRefreshToken, verifyRefreshToken, TokenPayload } from '../lib/jwt'
+import { recreatePrismaClient } from '../lib/prisma'
 import { authenticate, AuthRequest } from '../middleware/auth'
 import { sendTwoFactorCode, sendPasswordReset, sendEmailVerification } from '../services/email'
 
@@ -333,29 +334,39 @@ router.post('/reset-password', async (req: Request, res: Response) => {
   }
 })
 
-// POST /api/auth/refresh — rota do refresh token com rotação obrigatória
+// POST /api/auth/refresh — rotação de refresh token
+// A validação é feita via JWT (sem Prisma) para que Prisma panics não quebrem a sessão.
+// A rotação na BD é feita de forma assíncrona — a resposta é enviada independentemente.
 router.post('/refresh', async (req: Request, res: Response) => {
   const { refreshToken } = req.body
   if (!refreshToken) return res.status(400).json({ error: 'Refresh token em falta' })
+
+  // Valida assinatura + expiração do JWT — lança se inválido ou expirado
+  let payload: TokenPayload
   try {
-    const payload = verifyRefreshToken(refreshToken)
-
-    // deleteMany é atómico — trata pedidos concorrentes sem corrida (não lança erro se já apagado)
-    const deleted = await prisma.refreshToken.deleteMany({
-      where: { token: refreshToken, expiresAt: { gte: new Date() } },
-    })
-    if (deleted.count === 0) return res.status(401).json({ error: 'Refresh token inválido' })
-    const tokenPayload = { userId: payload.userId, clubId: payload.clubId, role: payload.role, platformAdmin: payload.platformAdmin }
-    const newRefreshToken = signRefreshToken(tokenPayload)
-    await prisma.refreshToken.create({
-      data: { userId: payload.userId, token: newRefreshToken, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) },
-    })
-
-    const accessToken = signAccessToken(tokenPayload)
-    return res.json({ accessToken, refreshToken: newRefreshToken })
+    payload = verifyRefreshToken(refreshToken)
   } catch {
     return res.status(401).json({ error: 'Refresh token inválido' })
   }
+
+  const tokenPayload: TokenPayload = {
+    userId: payload.userId,
+    clubId: payload.clubId,
+    role: payload.role,
+    platformAdmin: payload.platformAdmin,
+  }
+  const newRefreshToken = signRefreshToken(tokenPayload)
+  const accessToken = signAccessToken(tokenPayload)
+
+  // Rotar token na BD de forma assíncrona — não bloqueia a resposta
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+  prisma.refreshToken.deleteMany({ where: { token: refreshToken } })
+    .then(() => prisma.refreshToken.create({ data: { userId: payload.userId, token: newRefreshToken, expiresAt } }))
+    .catch((err: any) => {
+      if (err?.name === 'PrismaClientRustPanicError') recreatePrismaClient()
+    })
+
+  return res.json({ accessToken, refreshToken: newRefreshToken })
 })
 
 // POST /api/auth/logout
