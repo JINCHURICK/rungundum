@@ -80,7 +80,7 @@ router.post('/register', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Email já registado' })
     }
 
-    const passwordHash = await bcrypt.hash(data.password, 12)
+    const passwordHash = await bcrypt.hash(data.password, 10)
     const verificationToken = randomBytes(32).toString('hex')
     const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24h
     const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 dias de trial
@@ -188,11 +188,11 @@ router.post('/resend-verification', async (req: Request, res: Response) => {
     await prisma.user.update({ where: { id: user.id }, data: { verificationToken, verificationExpires } })
 
     const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5173'
-    await sendEmailVerification({
+    sendEmailVerification({
       to: user.email,
       clubName: user.club.name,
       verifyUrl: `${clientUrl}/verify-email/${verificationToken}`,
-    })
+    }).catch(err => console.error('[Email resend]', err.message))
 
     return res.json({ message: 'Se o email existir e não estiver verificado, receberás um novo link.' })
   } catch (err) {
@@ -293,7 +293,8 @@ router.post('/forgot-password', forgotLimiter, async (req: Request, res: Respons
     })
 
     const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5173'
-    await sendPasswordReset({ to: user.email, resetUrl: `${clientUrl}/reset-password/${token}`, clubName: user.club.name })
+    sendPasswordReset({ to: user.email, resetUrl: `${clientUrl}/reset-password/${token}`, clubName: user.club.name })
+      .catch(err => console.error('[Email reset]', err.message))
 
     return res.json({ message: 'Se o email existir, receberás um link.' })
   } catch (err) {
@@ -313,7 +314,7 @@ router.post('/reset-password', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Link inválido ou expirado.' })
     }
 
-    const passwordHash = await bcrypt.hash(password, 12)
+    const passwordHash = await bcrypt.hash(password, 10)
     await prisma.user.update({
       where: { id: user.id },
       data: { passwordHash, resetToken: null, resetTokenExpiresAt: null },
@@ -388,7 +389,7 @@ router.post('/invite/:token', async (req: Request, res: Response) => {
     if (member.userId) return res.status(409).json({ error: 'Este convite já foi utilizado' })
     if (await prisma.user.findUnique({ where: { email } })) return res.status(400).json({ error: 'Email já registado' })
 
-    const passwordHash = await bcrypt.hash(password, 12)
+    const passwordHash = await bcrypt.hash(password, 10)
     const result = await prisma.$transaction(async (tx) => {
       // Convite validado = email confiável, marcar como verificado imediatamente
       const user = await tx.user.create({ data: { clubId: member.clubId, email, passwordHash, role: 'MEMBER', emailVerified: true } })
