@@ -25,6 +25,7 @@ import positionsRoutes from './routes/positions'
 import plansRoutes from './routes/plans'
 import notificationsRoutes from './routes/notifications'
 import { errorHandler, notFound } from './middleware/error'
+import { ensureWarmedUp } from './lib/startup'
 import cron from 'node-cron'
 import { runQuotaAlerts } from './services/quotaAlerts'
 
@@ -63,6 +64,10 @@ app.use(globalLimiter)
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')))
 
 app.get('/health', (_, res) => res.json({ status: 'ok', version: '1.0.2', timestamp: new Date().toISOString() }))
+
+// Prisma's Rust/Tokio engine needs ~2s to initialize on Hostinger shared hosting.
+// Hold every non-health request until that window has passed, then release all at once.
+app.use((req, res, next) => { ensureWarmedUp().then(next) })
 
 app.use('/api/auth', authRoutes)
 app.use('/api/clubs', clubRoutes)

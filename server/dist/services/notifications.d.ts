@@ -6,7 +6,6 @@ export declare function createNotification(params: {
     body?: string;
     link?: string;
 }): Promise<{
-    link: string | null;
     type: string;
     userId: string;
     id: string;
@@ -14,6 +13,7 @@ export declare function createNotification(params: {
     clubId: string;
     title: string;
     body: string | null;
+    link: string | null;
     read: boolean;
 }>;
 export declare function createNotificationForAllMembers(params: {

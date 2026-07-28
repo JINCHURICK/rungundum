@@ -29,6 +29,7 @@ const positions_1 = __importDefault(require("./routes/positions"));
 const plans_1 = __importDefault(require("./routes/plans"));
 const notifications_1 = __importDefault(require("./routes/notifications"));
 const error_1 = require("./middleware/error");
+const startup_1 = require("./lib/startup");
 const node_cron_1 = __importDefault(require("node-cron"));
 const quotaAlerts_1 = require("./services/quotaAlerts");
 const app = (0, express_1.default)();
@@ -59,6 +60,9 @@ app.use(globalLimiter);
 // Em produção, usar Cloudinary que tem controlo de acesso próprio
 app.use('/uploads', express_1.default.static(path_1.default.join(__dirname, '..', 'uploads')));
 app.get('/health', (_, res) => res.json({ status: 'ok', version: '1.0.2', timestamp: new Date().toISOString() }));
+// Prisma's Rust/Tokio engine needs ~2s to initialize on Hostinger shared hosting.
+// Hold every non-health request until that window has passed, then release all at once.
+app.use((req, res, next) => { (0, startup_1.ensureWarmedUp)().then(next); });
 app.use('/api/auth', auth_1.default);
 app.use('/api/clubs', clubs_1.default);
 app.use('/api/members', members_1.default);

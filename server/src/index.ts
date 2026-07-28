@@ -1,8 +1,35 @@
 import './env'
 import app from './app'
+import { recreatePrismaClient } from './lib/prisma'
 
 const socketPath = process.env.LSNODE_SOCKET
 const PORT = parseInt(process.env.PORT ?? '3001', 10)
+
+// Safety net: if Prisma's Rust engine panics despite the warmup delay,
+// recreate the client instead of crashing the process.
+function isPrismaPanic(err: any) {
+  return err?.name === 'PrismaClientRustPanicError'
+}
+
+process.on('unhandledRejection', (reason) => {
+  if (isPrismaPanic(reason)) {
+    console.error('Prisma panic (unhandledRejection) — recreating client')
+    recreatePrismaClient()
+    return
+  }
+  console.error('Unhandled rejection:', reason)
+  process.exit(1)
+})
+
+process.on('uncaughtException', (err) => {
+  if (isPrismaPanic(err)) {
+    console.error('Prisma panic (uncaughtException) — recreating client')
+    recreatePrismaClient()
+    return
+  }
+  console.error('Uncaught exception:', err)
+  process.exit(1)
+})
 
 if (socketPath) {
   app.listen(socketPath, () => {
