@@ -17,10 +17,20 @@ const DEFAULT_PLAN_CONFIGS = [
   },
 ]
 
-// GET /api/plans/public — público, sem autenticação nem BD (evita Prisma panic no arranque)
-// Os planos são os DEFAULT_PLAN_CONFIGS; para personalizar, editar a constante acima.
-router.get('/public', (_req, res) => {
-  return res.json(DEFAULT_PLAN_CONFIGS.filter((c: any) => c.active !== false))
+// GET /api/plans/public — público, lê platformSettings.planConfigs; fallback para DEFAULT_PLAN_CONFIGS
+router.get('/public', async (_req, res) => {
+  try {
+    const settings = await prisma.platformSettings.findUnique({ where: { id: 'singleton' } })
+    const raw = (settings?.planConfigs as any[]) ?? []
+    const configs = raw.length ? raw : DEFAULT_PLAN_CONFIGS
+    return res.json(
+      configs
+        .filter((c: any) => c.active !== false)
+        .sort((a: any, b: any) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
+    )
+  } catch {
+    return res.json(DEFAULT_PLAN_CONFIGS)
+  }
 })
 
 // GET /api/plans — público, sem autenticação (legado)
