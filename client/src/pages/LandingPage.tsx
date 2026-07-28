@@ -49,7 +49,7 @@ export default function LandingPage() {
 
   const { data: dbPlans = [], isLoading: dbPlansLoading } = useQuery<any[]>({
     queryKey: ['plans-public'],
-    queryFn:  () => api.get('/plans').then(r => r.data),
+    queryFn:  () => api.get('/plans/public').then(r => r.data),
     staleTime: 5 * 60 * 1000,
   })
 
@@ -197,15 +197,30 @@ export default function LandingPage() {
                 <div className="animate-spin w-6 h-6 border-2 border-gray-200 rounded-full" style={{ borderTopColor: '#dc2626' }} />
               </div>
             ) : (
-              <div className="grid gap-5 max-w-5xl mx-auto md:grid-cols-4">
+              <div className={`grid gap-5 max-w-5xl mx-auto ${
+                dbPlans.length <= 1 ? 'max-w-sm' :
+                dbPlans.length === 2 ? 'sm:grid-cols-2 max-w-2xl' :
+                dbPlans.length === 3 ? 'sm:grid-cols-3' :
+                'md:grid-cols-4'
+              }`}>
                 {dbPlans.map((p: any) => {
-                  const isPopular = p.code === 'comitiva'
-                  const price     = landingBilling === 'ANNUAL' ? p.priceAnnualKz : p.priceMonthlyKz
-                  const savings   = Math.round(100 - (p.priceAnnualKz / (p.priceMonthlyKz * 12)) * 100)
+                  const isPopular    = p.highlight === true
+                  const isContact    = p.contactOnly === true
+                  const tiers        = (p.pricingTiers ?? []) as any[]
+                  const isFree       = !isContact && tiers.length === 0
+                  const monthlyTier  = tiers.find((t: any) => t.months === 1) ?? tiers[0]
+                  const annualTier   = tiers.find((t: any) => t.months === 12) ?? tiers[tiers.length - 1]
+                  const selectedTier = landingBilling === 'ANNUAL' ? annualTier : monthlyTier
+                  const price        = selectedTier?.pricePerMonth ?? 0
+                  const savings      = monthlyTier && annualTier && monthlyTier !== annualTier && monthlyTier.pricePerMonth > 0
+                    ? Math.round((1 - annualTier.pricePerMonth / monthlyTier.pricePerMonth) * 100)
+                    : 0
+                  const currency     = p.currency ?? 'Kz'
+                  const features     = (p.features as string[]) ?? []
 
                   return (
                     <div
-                      key={p.code}
+                      key={p.key}
                       className={`rounded-2xl border flex flex-col overflow-hidden ${isPopular
                         ? 'bg-red-600 border-red-600 shadow-2xl shadow-red-200'
                         : 'bg-white border-gray-200 shadow-sm'
@@ -222,25 +237,34 @@ export default function LandingPage() {
                       <div className="p-6 flex flex-col flex-1">
                         <h3 className={`text-lg font-bold mb-0.5 ${isPopular ? 'text-white' : 'text-gray-900'}`}>{p.name}</h3>
                         <p className={`text-xs mb-4 ${isPopular ? 'text-red-200' : 'text-gray-400'}`}>
-                          {p.memberLimit !== null ? `Até ${p.memberLimit} membros` : 'Membros ilimitados'}
+                          {p.maxMembers !== null ? `Até ${p.maxMembers} membros` : 'Membros ilimitados'}
                         </p>
 
                         <div className="mb-5">
-                          <div className="flex items-end gap-1 flex-wrap">
-                            <span className={`text-3xl font-extrabold ${isPopular ? 'text-white' : 'text-gray-900'}`}>
-                              {price.toLocaleString('pt-AO')}
-                            </span>
-                            <span className={`text-sm pb-1 ${isPopular ? 'text-red-200' : 'text-gray-400'}`}>Kz/mês</span>
-                          </div>
-                          {landingBilling === 'ANNUAL' && (
-                            <p className={`text-xs mt-0.5 ${isPopular ? 'text-red-200' : 'text-gray-400'}`}>
-                              {p.priceAnnualKz.toLocaleString('pt-AO')} Kz/ano <span className="text-green-400 font-semibold">(-{savings}%)</span>
-                            </p>
+                          {isFree ? (
+                            <span className={`text-3xl font-extrabold ${isPopular ? 'text-white' : 'text-gray-900'}`}>Grátis</span>
+                          ) : isContact ? (
+                            <span className={`text-3xl font-extrabold ${isPopular ? 'text-white' : 'text-gray-900'}`}>Sob consulta</span>
+                          ) : (
+                            <>
+                              <div className="flex items-end gap-1 flex-wrap">
+                                <span className={`text-3xl font-extrabold ${isPopular ? 'text-white' : 'text-gray-900'}`}>
+                                  {price.toLocaleString('pt-AO')}
+                                </span>
+                                <span className={`text-sm pb-1 ${isPopular ? 'text-red-200' : 'text-gray-400'}`}>{currency}/mês</span>
+                              </div>
+                              {landingBilling === 'ANNUAL' && annualTier && (
+                                <p className={`text-xs mt-0.5 ${isPopular ? 'text-red-200' : 'text-gray-400'}`}>
+                                  {annualTier.totalPrice.toLocaleString('pt-AO')} {currency}/ano
+                                  {savings > 0 && <span className="text-green-400 font-semibold"> (-{savings}%)</span>}
+                                </p>
+                              )}
+                            </>
                           )}
                         </div>
 
                         <ul className="space-y-2 mb-6 flex-1">
-                          {['Todos os recursos', 'Raids ilimitados', 'SMS e email', 'Tesouraria', 'Processos disciplinares', 'Suporte'].map(feat => (
+                          {(features.length > 0 ? features : ['Todos os recursos', 'Raids ilimitados', 'SMS e email', 'Tesouraria', 'Processos disciplinares', 'Suporte']).map(feat => (
                             <li key={feat} className="flex items-center gap-2 text-xs">
                               <CheckCircle2 size={13} className={isPopular ? 'text-red-200 shrink-0' : 'text-green-500 shrink-0'} />
                               <span className={isPopular ? 'text-red-100' : 'text-gray-500'}>{feat}</span>
