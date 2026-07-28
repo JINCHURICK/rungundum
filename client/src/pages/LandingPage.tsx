@@ -6,7 +6,7 @@ import { useAuthStore } from '@/store/auth'
 import { api } from '@/lib/api'
 
 // Muda para true para mostrar a secção de preços/planos na landing page
-const SHOW_PRICING = false
+const SHOW_PRICING = true
 
 
 const features = [

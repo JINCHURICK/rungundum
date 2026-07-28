@@ -67,7 +67,7 @@ async function createSession(userId: string, clubId: string, role: string, platf
   // Sessão única: invalida todas as sessões anteriores do utilizador
   await prisma.refreshToken.deleteMany({ where: { userId } })
   await prisma.refreshToken.create({
-    data: { userId, token: refreshToken, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() },
+    data: { userId, token: refreshToken, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) },
   })
   return { accessToken, refreshToken }
 }
@@ -82,8 +82,8 @@ router.post('/register', async (req: Request, res: Response) => {
 
     const passwordHash = await bcrypt.hash(data.password, 10)
     const verificationToken = randomBytes(32).toString('hex')
-    const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24h
-    const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 dias de trial
+    const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24h
+    const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 dias de trial
 
     // PrismaNeonHTTP: misturar DateTime + Json no mesmo create() causa serialização
     // incorrecta do Date (bug do adapter) — separamos em dois passos
@@ -119,8 +119,8 @@ router.post('/register', async (req: Request, res: Response) => {
     // criar subscrição trial no plano Comitiva (sem bloquear registo se plano não existir ainda)
     prisma.plan.findUnique({ where: { code: 'comitiva' } }).then(plan => {
       if (!plan) return
-      const now = new Date().toISOString()
-      const end = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+      const now = new Date()
+      const end = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
       return prisma.subscription.upsert({
         where:  { clubId: result.club.id },
         update: {},
@@ -187,8 +187,7 @@ router.post('/resend-verification', async (req: Request, res: Response) => {
     }
 
     const verificationToken = randomBytes(32).toString('hex')
-    const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-
+    const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000)
     await prisma.user.update({ where: { id: user.id }, data: { verificationToken, verificationExpires } })
 
     const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5173'
@@ -225,7 +224,7 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
     // Gerar código 2FA de 6 dígitos com CSPRNG
     const code = String(randomInt(100000, 1000000)).padStart(6, '0')
     const token = randomBytes(32).toString('hex')
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString() // 10 minutos
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000) // 10 minutos
 
     await prisma.pendingAuth.upsert({
       where: { userId: user.id },
@@ -289,7 +288,7 @@ router.post('/forgot-password', forgotLimiter, async (req: Request, res: Respons
     if (!user) return res.json({ message: 'Se o email existir, receberás um link.' })
 
     const token = randomBytes(32).toString('hex')
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString() // 1 hora
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000) // 1 hora
 
     await prisma.user.update({
       where: { id: user.id },
@@ -349,7 +348,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
     const tokenPayload = { userId: payload.userId, clubId: payload.clubId, role: payload.role, platformAdmin: payload.platformAdmin }
     const newRefreshToken = signRefreshToken(tokenPayload)
     await prisma.refreshToken.create({
-      data: { userId: payload.userId, token: newRefreshToken, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() },
+      data: { userId: payload.userId, token: newRefreshToken, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) },
     })
 
     const accessToken = signAccessToken(tokenPayload)

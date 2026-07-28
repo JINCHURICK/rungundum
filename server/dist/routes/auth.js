@@ -63,7 +63,7 @@ async function createSession(userId, clubId, role, platformAdmin = false) {
     // Sessão única: invalida todas as sessões anteriores do utilizador
     await prisma_1.prisma.refreshToken.deleteMany({ where: { userId } });
     await prisma_1.prisma.refreshToken.create({
-        data: { userId, token: refreshToken, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() },
+        data: { userId, token: refreshToken, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) },
     });
     return { accessToken, refreshToken };
 }
@@ -76,8 +76,8 @@ router.post('/register', async (req, res) => {
         }
         const passwordHash = await bcryptjs_1.default.hash(data.password, 10);
         const verificationToken = (0, crypto_1.randomBytes)(32).toString('hex');
-        const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24h
-        const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 dias de trial
+        const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+        const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 dias de trial
         // PrismaNeonHTTP: misturar DateTime + Json no mesmo create() causa serialização
         // incorrecta do Date (bug do adapter) — separamos em dois passos
         const club = await prisma_1.prisma.club.create({
@@ -112,8 +112,8 @@ router.post('/register', async (req, res) => {
         prisma_1.prisma.plan.findUnique({ where: { code: 'comitiva' } }).then(plan => {
             if (!plan)
                 return;
-            const now = new Date().toISOString();
-            const end = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+            const now = new Date();
+            const end = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
             return prisma_1.prisma.subscription.upsert({
                 where: { clubId: result.club.id },
                 update: {},
@@ -175,7 +175,7 @@ router.post('/resend-verification', async (req, res) => {
             return res.json({ message: 'Se o email existir e não estiver verificado, receberás um novo link.' });
         }
         const verificationToken = (0, crypto_1.randomBytes)(32).toString('hex');
-        const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
         await prisma_1.prisma.user.update({ where: { id: user.id }, data: { verificationToken, verificationExpires } });
         const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5173';
         (0, email_1.sendEmailVerification)({
@@ -208,7 +208,7 @@ router.post('/login', loginLimiter, async (req, res) => {
         // Gerar código 2FA de 6 dígitos com CSPRNG
         const code = String((0, crypto_1.randomInt)(100000, 1000000)).padStart(6, '0');
         const token = (0, crypto_1.randomBytes)(32).toString('hex');
-        const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutos
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutos
         await prisma_1.prisma.pendingAuth.upsert({
             where: { userId: user.id },
             update: { code, token, expiresAt },
@@ -266,7 +266,7 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
         if (!user)
             return res.json({ message: 'Se o email existir, receberás um link.' });
         const token = (0, crypto_1.randomBytes)(32).toString('hex');
-        const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hora
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
         await prisma_1.prisma.user.update({
             where: { id: user.id },
             data: { resetToken: token, resetTokenExpiresAt: expiresAt },
@@ -322,7 +322,7 @@ router.post('/refresh', async (req, res) => {
         const tokenPayload = { userId: payload.userId, clubId: payload.clubId, role: payload.role, platformAdmin: payload.platformAdmin };
         const newRefreshToken = (0, jwt_1.signRefreshToken)(tokenPayload);
         await prisma_1.prisma.refreshToken.create({
-            data: { userId: payload.userId, token: newRefreshToken, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() },
+            data: { userId: payload.userId, token: newRefreshToken, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) },
         });
         const accessToken = (0, jwt_1.signAccessToken)(tokenPayload);
         return res.json({ accessToken, refreshToken: newRefreshToken });
