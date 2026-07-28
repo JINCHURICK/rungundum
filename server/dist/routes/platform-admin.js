@@ -5,6 +5,7 @@ const zod_1 = require("zod");
 const prisma_1 = require("../lib/prisma");
 const auth_1 = require("../middleware/auth");
 const plans_1 = require("../lib/plans");
+const plan_cache_1 = require("../lib/plan-cache");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate, auth_1.requirePlatformAdmin);
 function clubTrialDaysLeft(trialEndsAt) {
@@ -281,6 +282,7 @@ router.put('/plan-configs', async (req, res) => {
             create: { id: 'singleton', planConfigs: configs },
             update: { planConfigs: configs },
         });
+        (0, plan_cache_1.writePlanCache)(configs);
         return res.json(settings.planConfigs);
     }
     catch (err) {

@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const prisma_1 = require("../lib/prisma");
+const plan_cache_1 = require("../lib/plan-cache");
 const router = (0, express_1.Router)();
 const DEFAULT_PLAN_CONFIGS = [
     {
@@ -16,21 +17,15 @@ const DEFAULT_PLAN_CONFIGS = [
         ],
     },
 ];
-// GET /api/plans/public — público, lê platformSettings.planConfigs; fallback para DEFAULT_PLAN_CONFIGS
-router.get('/public', async (_req, res) => {
-    try {
-        const settings = await prisma_1.prisma.platformSettings.findUnique({ where: { id: 'singleton' } });
-        const raw = settings?.planConfigs ?? [];
-        const configs = raw.length ? raw : DEFAULT_PLAN_CONFIGS;
-        return res.json(configs
-            .filter((c) => c.active !== false)
-            .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)));
-    }
-    catch {
-        return res.json(DEFAULT_PLAN_CONFIGS);
-    }
+// GET /api/plans/public — reads from file cache (no Prisma); falls back to defaults
+// File cache is written by PUT /api/platform-admin/plan-configs
+router.get('/public', (_req, res) => {
+    const configs = (0, plan_cache_1.readPlanCache)() ?? DEFAULT_PLAN_CONFIGS;
+    return res.json(configs
+        .filter((c) => c.active !== false)
+        .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)));
 });
-// GET /api/plans — público, sem autenticação (legado)
+// GET /api/plans — legado
 router.get('/', async (_req, res) => {
     const plans = await prisma_1.prisma.plan.findMany({
         where: { isActive: true },

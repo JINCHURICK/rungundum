@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { authenticate, requirePlatformAdmin, AuthRequest } from '../middleware/auth'
 import { PLAN_LABELS, PLAN_LIMITS, PLAN_PRICES, type PlanKey } from '../lib/plans'
+import { writePlanCache } from '../lib/plan-cache'
 
 const router = Router()
 router.use(authenticate, requirePlatformAdmin)
@@ -288,6 +289,7 @@ router.put('/plan-configs', async (req: AuthRequest, res: Response) => {
       update: { planConfigs: configs },
     })
 
+    writePlanCache(configs)
     return res.json(settings.planConfigs)
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors })
