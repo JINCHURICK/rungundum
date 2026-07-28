@@ -85,32 +85,31 @@ router.post('/register', async (req: Request, res: Response) => {
     const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24h
     const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 dias de trial
 
-    const result = await prisma.$transaction(async (tx) => {
-      const club = await tx.club.create({
-        data: {
-          name: data.clubName, acronym: data.clubAcronym, location: data.clubLocation,
-          planStatus: 'TRIAL',
-          trialEndsAt,
-          defaultSettings: {
-            maxSpeed: 90, minDistance: 3, radioChannel: 'PMR446 Canal 6',
-            contingency: {
-              accident: 'Em caso de acidente: parar imediatamente, activar luzes de emergência, ligar 113, sinalizar a zona, aguardar Capitão de Estrada.',
-              breakdown: 'Em caso de avaria: accionar pisca-pisca, mover a moto para fora da faixa, ligar ao Capitão de Estrada.',
-              separation: 'Em caso de separação: parar no próximo ponto seguro, ligar ao Capitão de Estrada via rádio ou telefone.',
-              weather: 'Em caso de mau tempo: reduzir velocidade, aumentar distância de segurança, parar num local coberto se necessário.',
-            },
+    // PrismaNeonHTTP (HTTP adapter) não suporta transacções interactivas —
+    // usamos queries sequenciais; falhas parciais são raras e recuperáveis
+    const club = await prisma.club.create({
+      data: {
+        name: data.clubName, acronym: data.clubAcronym, location: data.clubLocation,
+        planStatus: 'TRIAL',
+        trialEndsAt,
+        defaultSettings: {
+          maxSpeed: 90, minDistance: 3, radioChannel: 'PMR446 Canal 6',
+          contingency: {
+            accident: 'Em caso de acidente: parar imediatamente, activar luzes de emergência, ligar 113, sinalizar a zona, aguardar Capitão de Estrada.',
+            breakdown: 'Em caso de avaria: accionar pisca-pisca, mover a moto para fora da faixa, ligar ao Capitão de Estrada.',
+            separation: 'Em caso de separação: parar no próximo ponto seguro, ligar ao Capitão de Estrada via rádio ou telefone.',
+            weather: 'Em caso de mau tempo: reduzir velocidade, aumentar distância de segurança, parar num local coberto se necessário.',
           },
         },
-      })
-      const user = await tx.user.create({
-        data: {
-          clubId: club.id, email: data.email, passwordHash, role: 'ADMIN',
-          verificationToken, verificationExpires,
-        },
-      })
-      const member = await tx.member.create({ data: { clubId: club.id, userId: user.id, fullName: data.fullName, status: 'ACTIVE' } })
-      return { club, user, member }
+      },
     })
+    const user = await prisma.user.create({
+      data: { clubId: club.id, email: data.email, passwordHash, role: 'ADMIN', verificationToken, verificationExpires },
+    })
+    const member = await prisma.member.create({
+      data: { clubId: club.id, userId: user.id, fullName: data.fullName, status: 'ACTIVE' },
+    })
+    const result = { club, user, member }
 
     // criar subscrição trial no plano Comitiva (sem bloquear registo se plano não existir ainda)
     prisma.plan.findUnique({ where: { code: 'comitiva' } }).then(plan => {
