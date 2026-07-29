@@ -74,6 +74,8 @@ export default function PlatformPlans() {
   const [loading,  setLoading]  = useState(true)
   const [saving,   setSaving]   = useState(false)
   const [editIdx,  setEditIdx]  = useState<number | null>(null)
+  const [customPeriodFor, setCustomPeriodFor] = useState<number | null>(null)
+  const [customMonths,    setCustomMonths]    = useState('')
 
   async function load() {
     setLoading(true)
@@ -549,10 +551,7 @@ export default function PlatformPlans() {
                           ))}
                           {/* Custom */}
                           <button
-                            onClick={() => {
-                              const m = parseInt(prompt('Número de meses:') ?? '0')
-                              if (m > 0) addTier(idx, m, `${m} meses`)
-                            }}
+                            onClick={() => { setCustomPeriodFor(idx); setCustomMonths('') }}
                             className="px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600 transition-all"
                           >
                             <Plus size={10} className="inline mr-0.5" /> Outro
@@ -580,6 +579,49 @@ export default function PlatformPlans() {
           )
         })}
       </div>
+
+      {/* Modal período personalizado */}
+      {customPeriodFor !== null && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setCustomPeriodFor(null)}>
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-72 space-y-4" onClick={e => e.stopPropagation()}>
+            <h3 className="font-semibold text-gray-900 text-sm">Período personalizado</h3>
+            <input
+              type="number"
+              min="1"
+              max="60"
+              value={customMonths}
+              onChange={e => setCustomMonths(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  const m = parseInt(customMonths)
+                  if (m > 0) { addTier(customPeriodFor, m, `${m} meses`); setCustomPeriodFor(null) }
+                }
+                if (e.key === 'Escape') setCustomPeriodFor(null)
+              }}
+              autoFocus
+              placeholder="Ex: 24"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setCustomPeriodFor(null)}
+                className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  const m = parseInt(customMonths)
+                  if (m > 0) { addTier(customPeriodFor, m, `${m} meses`); setCustomPeriodFor(null) }
+                }}
+                className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors"
+              >
+                Adicionar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Floating save bar */}
       {isDirty && (

@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
+const compression_1 = __importDefault(require("compression"));
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const path_1 = __importDefault(require("path"));
 require("dotenv/config");
@@ -36,10 +37,13 @@ const app = (0, express_1.default)();
 // Hostinger (e qualquer hosting com reverse proxy) envia X-Forwarded-For
 // sem isto o express-rate-limit lança ValidationError em cada pedido
 app.set('trust proxy', 1);
+// Compressão gzip/brotli — crítico para redes móveis
+app.use((0, compression_1.default)());
 // Security headers
 app.use((0, helmet_1.default)({
     contentSecurityPolicy: false, // CSP gerido pelo frontend (Vite)
     crossOriginEmbedderPolicy: false,
+    hsts: { maxAge: 31536000, includeSubDomains: true },
 }));
 // CORS — apenas origem conhecida
 const allowedOrigin = process.env.CLIENT_URL ?? 'http://localhost:5173';

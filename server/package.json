@@ -14,9 +14,11 @@
   },
   "dependencies": {
     "@prisma/client": "^5.14.0",
+    "@types/compression": "^1.8.1",
     "@types/nodemailer": "^8.0.1",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.3.0",
+    "compression": "^1.8.1",
     "cors": "^2.8.5",
     "date-fns": "^3.6.0",
     "dotenv": "^16.4.5",

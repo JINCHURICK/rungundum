@@ -57,6 +57,7 @@ const RAID_STATUS_VALUES = ['DRAFT', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'C
 type RaidStatus = typeof RAID_STATUS_VALUES[number]
 
 // GET /api/raids
+// Paginação opcional: ?page=1&limit=50 (sem estes params retorna tudo — backward compat)
 router.get('/', async (req: AuthRequest, res: Response) => {
   const rawStatus = typeof req.query.status === 'string' ? req.query.status : undefined
   const status: RaidStatus | undefined = RAID_STATUS_VALUES.includes(rawStatus as any) ? rawStatus as RaidStatus : undefined
@@ -65,26 +66,41 @@ router.get('/', async (req: AuthRequest, res: Response) => {
   const dateFilter = year && !isNaN(year) ? {
     date: { gte: new Date(`${year}-01-01`), lt: new Date(`${year + 1}-01-01`) },
   } : {}
-  const raids = await prisma.raid.findMany({
-    where: {
-      clubId: req.user!.clubId,
-      ...(status ? { status } : {}),
-      ...dateFilter,
-      ...(search ? {
-        OR: [
-          { title: { contains: search } },
-          { origin: { contains: search } },
-          { destination: { contains: search } },
-        ],
-      } : {}),
-    },
-    include: {
-      _count: { select: { participants: true } },
-      participants: { where: { status: 'CONFIRMED' }, select: { id: true } },
-      routePoints: { orderBy: { order: 'asc' }, take: 1 },
-    },
-    orderBy: { date: 'desc' },
-  })
+  const pageRaw  = typeof req.query.page  === 'string' ? parseInt(req.query.page,  10) : undefined
+  const limitRaw = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : undefined
+  const paginate = pageRaw !== undefined && limitRaw !== undefined && !isNaN(pageRaw) && !isNaN(limitRaw)
+  const page  = paginate ? Math.max(1, pageRaw!)  : undefined
+  const limit = paginate ? Math.min(100, Math.max(1, limitRaw!)) : undefined
+
+  const where = {
+    clubId: req.user!.clubId,
+    ...(status ? { status } : {}),
+    ...dateFilter,
+    ...(search ? {
+      OR: [
+        { title: { contains: search } },
+        { origin: { contains: search } },
+        { destination: { contains: search } },
+      ],
+    } : {}),
+  }
+
+  const include = {
+    _count: { select: { participants: true } },
+    participants: { where: { status: 'CONFIRMED' as const }, select: { id: true } },
+    routePoints: { orderBy: { order: 'asc' as const }, take: 1 },
+  }
+
+  const [raids, total] = paginate
+    ? await Promise.all([
+        prisma.raid.findMany({ where, include, orderBy: { date: 'desc' }, skip: (page! - 1) * limit!, take: limit }),
+        prisma.raid.count({ where }),
+      ])
+    : [await prisma.raid.findMany({ where, include, orderBy: { date: 'desc' } }), undefined]
+
+  if (paginate) {
+    return res.json({ data: raids, total, page, limit, pages: Math.ceil(total! / limit!) })
+  }
   return res.json(raids)
 })
 

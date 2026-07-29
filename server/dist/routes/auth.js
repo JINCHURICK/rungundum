@@ -15,6 +15,33 @@ const auth_1 = require("../middleware/auth");
 const email_1 = require("../services/email");
 const router = (0, express_1.Router)();
 const isDev = process.env.NODE_ENV !== 'production';
+// Rate limiting por email — complementa o limite por IP, resiste a IPs rotativos
+const failedByEmail = new Map();
+const EMAIL_WINDOW_MS = 15 * 60 * 1000; // 15 minutos
+const EMAIL_MAX_FAILS = 10;
+function checkEmailBlocked(email) {
+    const entry = failedByEmail.get(email);
+    if (!entry)
+        return false;
+    if (Date.now() > entry.resetAt) {
+        failedByEmail.delete(email);
+        return false;
+    }
+    return entry.count >= EMAIL_MAX_FAILS;
+}
+function recordEmailFailure(email) {
+    const now = Date.now();
+    const entry = failedByEmail.get(email);
+    if (entry && now > entry.resetAt) {
+        failedByEmail.delete(email);
+    }
+    const cur = failedByEmail.get(email) ?? { count: 0, resetAt: now + EMAIL_WINDOW_MS };
+    cur.count++;
+    failedByEmail.set(email, cur);
+}
+function clearEmailFailures(email) {
+    failedByEmail.delete(email);
+}
 const loginLimiter = (0, express_rate_limit_1.default)({
     windowMs: 15 * 60 * 1000,
     max: 10,
@@ -196,13 +223,21 @@ router.post('/resend-verification', async (req, res) => {
 router.post('/login', loginLimiter, async (req, res) => {
     try {
         const data = loginSchema.parse(req.body);
+        // Verificar bloqueio por email antes de consultar a BD
+        if (!isDev && checkEmailBlocked(data.email)) {
+            return res.status(429).json({ error: 'Conta temporariamente bloqueada. Aguarda 15 minutos.' });
+        }
         const user = await prisma_1.prisma.user.findUnique({
             where: { email: data.email },
             include: { club: true, member: true },
         });
         if (!user || !(await bcryptjs_1.default.compare(data.password, user.passwordHash))) {
+            if (!isDev)
+                recordEmailFailure(data.email);
             return res.status(401).json({ error: 'Email ou senha incorretos' });
         }
+        // Login bem sucedido — limpar contagem de falhas
+        clearEmailFailures(data.email);
         if (!user.emailVerified) {
             return res.status(403).json({ error: 'Verifica o teu email antes de fazer login.', requiresVerification: true, email: user.email });
         }

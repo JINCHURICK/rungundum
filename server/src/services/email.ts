@@ -1,4 +1,13 @@
-﻿import nodemailer from 'nodemailer'
+import nodemailer from 'nodemailer'
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
 
 const SMTP_HOST = process.env.SMTP_HOST
 const SMTP_PORT = parseInt(process.env.SMTP_PORT ?? '465', 10)
@@ -33,119 +42,133 @@ async function send(payload: { to: string; subject: string; html: string }) {
 }
 
 export async function sendTwoFactorCode(params: { to: string; code: string; clubName: string }) {
+  const clubName = escapeHtml(params.clubName)
   await send({
     to: params.to,
-    subject: `[${params.clubName}] Código de verificação: ${params.code}`,
+    subject: `[${clubName}] Código de verificação: ${params.code}`,
     html: `
-      <h2>Verificação de acesso — ${params.clubName}</h2>
+      <h2>Verificação de acesso — ${clubName}</h2>
       <p>O teu código de verificação é:</p>
       <div style="font-size:36px;font-weight:bold;letter-spacing:8px;color:#dc2626;margin:24px 0;font-family:monospace">${params.code}</div>
       <p style="color:#666;font-size:14px">Válido por 10 minutos. Se não foste tu, ignora este email.</p>
-      <p style="color:#666;font-size:14px">${params.clubName} · Rungundum</p>
+      <p style="color:#666;font-size:14px">${clubName} · Rungundum</p>
     `,
   })
 }
 
 export async function sendPasswordReset(params: { to: string; resetUrl: string; clubName: string }) {
+  const clubName = escapeHtml(params.clubName)
   await send({
     to: params.to,
-    subject: `[${params.clubName}] Recuperação de senha`,
+    subject: `[${clubName}] Recuperação de senha`,
     html: `
       <h2>Recuperação de senha</h2>
-      <p>Recebemos um pedido de recuperação de senha para a tua conta no <strong>${params.clubName}</strong>.</p>
+      <p>Recebemos um pedido de recuperação de senha para a tua conta no <strong>${clubName}</strong>.</p>
       <a href="${params.resetUrl}" style="background:#dc2626;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0">
         Definir nova senha →
       </a>
       <p style="color:#666;font-size:14px">O link expira em 1 hora. Se não pediste esta recuperação, ignora este email.</p>
-      <p style="color:#666;font-size:14px">${params.clubName} · Rungundum</p>
+      <p style="color:#666;font-size:14px">${clubName} · Rungundum</p>
     `,
   })
 }
 
 export async function sendAccountInvite(params: { to: string; memberName: string; clubName: string; inviteUrl: string }) {
+  const clubName   = escapeHtml(params.clubName)
+  const memberName = escapeHtml(params.memberName)
   await send({
     to: params.to,
-    subject: `[${params.clubName}] Convite para o Rungundum`,
+    subject: `[${clubName}] Convite para o Rungundum`,
     html: `
-      <h2>Olá ${params.memberName},</h2>
-      <p>Foste convidado para aceder ao sistema de gestão de raids do <strong>${params.clubName}</strong>.</p>
+      <h2>Olá ${memberName},</h2>
+      <p>Foste convidado para aceder ao sistema de gestão de raids do <strong>${clubName}</strong>.</p>
       <p>Clica no botão abaixo para criar a tua conta. O link é válido por 48 horas.</p>
       <a href="${params.inviteUrl}" style="background:#dc2626;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0">
         Criar a minha conta →
       </a>
       <p style="color:#666;font-size:12px">Se não esperavas este email, podes ignorá-lo.</p>
-      <p style="color:#666;font-size:14px">${params.clubName} · Rungundum</p>
+      <p style="color:#666;font-size:14px">${clubName} · Rungundum</p>
     `,
   })
 }
 
 export async function sendRaidPublished(params: { to: string; memberName: string; raidTitle: string; raidDate: string; clubName: string; publicUrl: string }) {
+  const clubName   = escapeHtml(params.clubName)
+  const memberName = escapeHtml(params.memberName)
+  const raidTitle  = escapeHtml(params.raidTitle)
+  const raidDate   = escapeHtml(params.raidDate)
   await send({
     to: params.to,
-    subject: `[${params.clubName}] Raid "${params.raidTitle}" confirmado — ${params.raidDate}`,
+    subject: `[${clubName}] Raid "${raidTitle}" confirmado — ${raidDate}`,
     html: `
-      <h2>Olá ${params.memberName},</h2>
-      <p>O raid <strong>${params.raidTitle}</strong> foi confirmado para <strong>${params.raidDate}</strong>.</p>
+      <h2>Olá ${memberName},</h2>
+      <p>O raid <strong>${raidTitle}</strong> foi confirmado para <strong>${raidDate}</strong>.</p>
       <a href="${params.publicUrl}" style="background:#dc2626;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0">
         Ver detalhes do raid →
       </a>
-      <p style="color:#666;font-size:14px">${params.clubName} · Rungundum</p>
+      <p style="color:#666;font-size:14px">${clubName} · Rungundum</p>
     `,
   })
 }
 
 export async function sendEmailVerification(params: { to: string; clubName: string; verifyUrl: string }) {
+  const clubName = escapeHtml(params.clubName)
   await send({
     to: params.to,
-    subject: `[${params.clubName}] Confirma o teu endereço de email`,
+    subject: `[${clubName}] Confirma o teu endereço de email`,
     html: `
-      <h2>Bem-vindo ao ${params.clubName}!</h2>
+      <h2>Bem-vindo ao ${clubName}!</h2>
       <p>Para activar a tua conta no Rungundum, confirma o teu endereço de email clicando no botão abaixo.</p>
       <a href="${params.verifyUrl}" style="background:#dc2626;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0">
         Verificar email →
       </a>
       <p style="color:#666;font-size:14px">O link expira em 24 horas.</p>
       <p style="color:#666;font-size:14px">Se não criaste esta conta, ignora este email.</p>
-      <p style="color:#666;font-size:14px">${params.clubName} · Rungundum</p>
+      <p style="color:#666;font-size:14px">${clubName} · Rungundum</p>
     `,
   })
 }
 
 export async function sendQuotaReminder(params: { to: string; memberName: string; clubName: string; year: number; amount: number; appUrl: string }) {
+  const clubName   = escapeHtml(params.clubName)
+  const memberName = escapeHtml(params.memberName)
   await send({
     to: params.to,
-    subject: `[${params.clubName}] Lembrete: Quota anual ${params.year} — ${params.amount}Kz`,
+    subject: `[${clubName}] Lembrete: Quota anual ${params.year} — ${params.amount}Kz`,
     html: `
-      <h2>Olá ${params.memberName},</h2>
-      <p>A tua quota anual <strong>${params.year}</strong> do <strong>${params.clubName}</strong> no valor de <strong>${params.amount}Kz</strong> ainda não foi paga.</p>
+      <h2>Olá ${memberName},</h2>
+      <p>A tua quota anual <strong>${params.year}</strong> do <strong>${clubName}</strong> no valor de <strong>${params.amount}Kz</strong> ainda não foi paga.</p>
       <p>Por favor, efectua o pagamento e contacta o administrador para confirmar.</p>
       <a href="${params.appUrl}" style="background:#dc2626;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0">
         Ver no Rungundum →
       </a>
-      <p style="color:#666;font-size:14px">${params.clubName} · Rungundum</p>
+      <p style="color:#666;font-size:14px">${clubName} · Rungundum</p>
     `,
   })
 }
 
 export async function sendQuotaPaid(params: { to: string; memberName: string; clubName: string; year: number; amount: number }) {
+  const clubName   = escapeHtml(params.clubName)
+  const memberName = escapeHtml(params.memberName)
   await send({
     to: params.to,
-    subject: `[${params.clubName}] Quota ${params.year} confirmada — ${params.amount}Kz`,
+    subject: `[${clubName}] Quota ${params.year} confirmada — ${params.amount}Kz`,
     html: `
-      <h2>Olá ${params.memberName},</h2>
-      <p>O pagamento da tua quota anual <strong>${params.year}</strong> no valor de <strong>${params.amount}Kz</strong> foi confirmado pelo administrador do <strong>${params.clubName}</strong>.</p>
+      <h2>Olá ${memberName},</h2>
+      <p>O pagamento da tua quota anual <strong>${params.year}</strong> no valor de <strong>${params.amount}Kz</strong> foi confirmado pelo administrador do <strong>${clubName}</strong>.</p>
       <p style="color:#16a34a;font-size:18px;font-weight:bold">✓ Quota paga</p>
-      <p style="color:#666;font-size:14px">${params.clubName} · Rungundum</p>
+      <p style="color:#666;font-size:14px">${clubName} · Rungundum</p>
     `,
   })
 }
 
 export async function sendTrialExpiring(params: { to: string; clubName: string; daysLeft: number; appUrl: string }) {
+  const clubName = escapeHtml(params.clubName)
   await send({
     to: params.to,
     subject: `[Rungundum] O teu período de prova expira em ${params.daysLeft} dias`,
     html: `
-      <h2>O período de prova do ${params.clubName} está a terminar</h2>
+      <h2>O período de prova do ${clubName} está a terminar</h2>
       <p>O teu período de prova gratuito do Rungundum expira em <strong>${params.daysLeft} dias</strong>.</p>
       <p>Para continuar a usar todas as funcionalidades, escolhe um plano.</p>
       <a href="${params.appUrl}/settings/subscription" style="background:#dc2626;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0">
@@ -160,7 +183,9 @@ export async function sendQuotaAlertEmail(params: {
   to: string; memberName: string; clubName: string; year: number
   monthsOverdue: number; monthlyAmount: number; level: number
 }) {
-  const { memberName: name, clubName: club, year, monthsOverdue: m, monthlyAmount, level } = params
+  const name = escapeHtml(params.memberName)
+  const club = escapeHtml(params.clubName)
+  const { year, monthsOverdue: m, monthlyAmount, level } = params
   const meses    = m === 1 ? '1 mês' : `${m} meses`
   const valorDev = (monthlyAmount * m).toLocaleString() + ' Kz'
 
@@ -213,16 +238,21 @@ export async function sendQuotaAlertEmail(params: {
 }
 
 export async function sendUpgradeRequest(params: { to: string; clubName: string; clubLocation: string; currentPlan: string; requestedPlan: string; clubAdminEmail: string; adminUrl: string }) {
+  const clubName      = escapeHtml(params.clubName)
+  const clubLocation  = escapeHtml(params.clubLocation)
+  const currentPlan   = escapeHtml(params.currentPlan)
+  const requestedPlan = escapeHtml(params.requestedPlan)
+  const adminEmail    = escapeHtml(params.clubAdminEmail)
   await send({
     to: params.to,
-    subject: `[Rungundum] Pedido de upgrade — ${params.clubName}`,
+    subject: `[Rungundum] Pedido de upgrade — ${clubName}`,
     html: `
       <h2>Pedido de upgrade de plano</h2>
       <table style="border-collapse:collapse;width:100%;margin:16px 0">
-        <tr><td style="padding:8px;color:#666;font-size:14px">Clube</td><td style="padding:8px;font-weight:bold">${params.clubName} (${params.clubLocation})</td></tr>
-        <tr><td style="padding:8px;color:#666;font-size:14px">Email do admin</td><td style="padding:8px">${params.clubAdminEmail}</td></tr>
-        <tr><td style="padding:8px;color:#666;font-size:14px">Plano actual</td><td style="padding:8px">${params.currentPlan}</td></tr>
-        <tr><td style="padding:8px;color:#666;font-size:14px">Plano pedido</td><td style="padding:8px;font-weight:bold;color:#dc2626">${params.requestedPlan}</td></tr>
+        <tr><td style="padding:8px;color:#666;font-size:14px">Clube</td><td style="padding:8px;font-weight:bold">${clubName} (${clubLocation})</td></tr>
+        <tr><td style="padding:8px;color:#666;font-size:14px">Email do admin</td><td style="padding:8px">${adminEmail}</td></tr>
+        <tr><td style="padding:8px;color:#666;font-size:14px">Plano actual</td><td style="padding:8px">${currentPlan}</td></tr>
+        <tr><td style="padding:8px;color:#666;font-size:14px">Plano pedido</td><td style="padding:8px;font-weight:bold;color:#dc2626">${requestedPlan}</td></tr>
       </table>
       <a href="${params.adminUrl}" style="background:#dc2626;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0">
         Gerir subscrições →
@@ -233,32 +263,40 @@ export async function sendUpgradeRequest(params: { to: string; clubName: string;
 }
 
 export async function sendRaidInvite(params: { to: string; memberName: string; raidTitle: string; raidDate: string; clubName: string; confirmUrl: string }) {
+  const clubName   = escapeHtml(params.clubName)
+  const memberName = escapeHtml(params.memberName)
+  const raidTitle  = escapeHtml(params.raidTitle)
+  const raidDate   = escapeHtml(params.raidDate)
   await send({
     to: params.to,
-    subject: `[${params.clubName}] Raid ${params.raidTitle} — Confirma a tua presença`,
+    subject: `[${clubName}] Raid ${raidTitle} — Confirma a tua presença`,
     html: `
-      <h2>Olá ${params.memberName},</h2>
-      <p>O raid <strong>${params.raidTitle}</strong> está confirmado para <strong>${params.raidDate}</strong>.</p>
+      <h2>Olá ${memberName},</h2>
+      <p>O raid <strong>${raidTitle}</strong> está confirmado para <strong>${raidDate}</strong>.</p>
       <p>Confirma a tua presença clicando no botão abaixo:</p>
       <a href="${params.confirmUrl}" style="background:#dc2626;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0">
         Confirmar Presença →
       </a>
-      <p style="color:#666;font-size:14px">${params.clubName} · Rungundum</p>
+      <p style="color:#666;font-size:14px">${clubName} · Rungundum</p>
     `,
   })
 }
 
 export async function sendRaidReminder(params: { to: string; memberName: string; raidTitle: string; raidDate: string; clubName: string; confirmUrl: string }) {
+  const clubName   = escapeHtml(params.clubName)
+  const memberName = escapeHtml(params.memberName)
+  const raidTitle  = escapeHtml(params.raidTitle)
+  const raidDate   = escapeHtml(params.raidDate)
   await send({
     to: params.to,
-    subject: `[${params.clubName}] Lembrete: Raid ${params.raidTitle} — Confirmação pendente`,
+    subject: `[${clubName}] Lembrete: Raid ${raidTitle} — Confirmação pendente`,
     html: `
-      <h2>Olá ${params.memberName},</h2>
-      <p>Ainda não confirmaste a tua presença no raid <strong>${params.raidTitle}</strong> de <strong>${params.raidDate}</strong>.</p>
+      <h2>Olá ${memberName},</h2>
+      <p>Ainda não confirmaste a tua presença no raid <strong>${raidTitle}</strong> de <strong>${raidDate}</strong>.</p>
       <a href="${params.confirmUrl}" style="background:#dc2626;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0">
         Confirmar Presença →
       </a>
-      <p style="color:#666;font-size:14px">${params.clubName} · Rungundum</p>
+      <p style="color:#666;font-size:14px">${clubName} · Rungundum</p>
     `,
   })
 }

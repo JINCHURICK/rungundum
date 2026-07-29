@@ -1,6 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
+import compression from 'compression'
 import rateLimit from 'express-rate-limit'
 import path from 'path'
 import 'dotenv/config'
@@ -35,10 +36,14 @@ const app = express()
 // sem isto o express-rate-limit lança ValidationError em cada pedido
 app.set('trust proxy', 1)
 
+// Compressão gzip/brotli — crítico para redes móveis
+app.use(compression())
+
 // Security headers
 app.use(helmet({
   contentSecurityPolicy: false, // CSP gerido pelo frontend (Vite)
   crossOriginEmbedderPolicy: false,
+  hsts: { maxAge: 31536000, includeSubDomains: true },
 }))
 
 // CORS — apenas origem conhecida

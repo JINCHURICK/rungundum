@@ -94,6 +94,7 @@ model RefreshToken {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
   @@map("refresh_tokens")
 }
 
@@ -133,6 +134,7 @@ model Member {
   transactions Transaction[]
   positions    ClubPosition[]
 
+  @@index([clubId, status])
   @@map("members")
 }
 
@@ -236,6 +238,7 @@ model Participant {
   vehicle       Vehicle?       @relation(fields: [vehicleId], references: [id])
   checklistItems ChecklistItem[]
 
+  @@index([raidId])
   @@unique([raidId, memberId])
   @@map("participants")
 }

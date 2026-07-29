@@ -38,24 +38,38 @@ const MEMBER_STATUS_VALUES = ['ACTIVE', 'INACTIVE', 'SUSPENDED', 'GUEST'] as con
 type MemberStatus = typeof MEMBER_STATUS_VALUES[number]
 
 // GET /api/members
+// Paginação opcional: ?page=1&limit=50 (sem estes params retorna tudo — backward compat)
 router.get('/', async (req: AuthRequest, res: Response) => {
   const rawStatus = typeof req.query.status === 'string' ? req.query.status : undefined
   const status: MemberStatus | undefined = MEMBER_STATUS_VALUES.includes(rawStatus as any) ? rawStatus as MemberStatus : undefined
   const search = typeof req.query.search === 'string' ? req.query.search.slice(0, 100) : undefined
-  const members = await prisma.member.findMany({
-    where: {
-      clubId: req.user!.clubId,
-      ...(status ? { status } : {}),
-      ...(search ? {
-        OR: [
-          { fullName: { contains: search } },
-          { nickname: { contains: search } },
-        ],
-      } : {}),
-    },
-    include: { vehicles: true, user: { select: { id: true, email: true, role: true } } },
-    orderBy: { fullName: 'asc' },
-  })
+  const pageRaw  = typeof req.query.page  === 'string' ? parseInt(req.query.page,  10) : undefined
+  const limitRaw = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : undefined
+  const paginate = pageRaw !== undefined && limitRaw !== undefined && !isNaN(pageRaw) && !isNaN(limitRaw)
+  const page  = paginate ? Math.max(1, pageRaw!)  : undefined
+  const limit = paginate ? Math.min(200, Math.max(1, limitRaw!)) : undefined
+
+  const where = {
+    clubId: req.user!.clubId,
+    ...(status ? { status } : {}),
+    ...(search ? {
+      OR: [
+        { fullName: { contains: search } },
+        { nickname: { contains: search } },
+      ],
+    } : {}),
+  }
+
+  const [members, total] = paginate
+    ? await Promise.all([
+        prisma.member.findMany({ where, include: { vehicles: true, user: { select: { id: true, email: true, role: true } } }, orderBy: { fullName: 'asc' }, skip: (page! - 1) * limit!, take: limit }),
+        prisma.member.count({ where }),
+      ])
+    : [await prisma.member.findMany({ where, include: { vehicles: true, user: { select: { id: true, email: true, role: true } } }, orderBy: { fullName: 'asc' } }), undefined]
+
+  if (paginate) {
+    return res.json({ data: members, total, page, limit, pages: Math.ceil(total! / limit!) })
+  }
   return res.json(members)
 })
 
