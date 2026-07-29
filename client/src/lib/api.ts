@@ -9,6 +9,11 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// Deduplicação do refresh: garante que apenas um pedido de refresh está em voo
+// ao mesmo tempo, evitando que múltiplos 401 simultâneos desencadeiem vários
+// refreshes concorrentes (o que activaria o reuse detection e causaria logout).
+let refreshPromise: Promise<string> | null = null
+
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
@@ -16,15 +21,20 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true
       try {
-        const refreshToken = useAuthStore.getState().refreshToken
-        if (!refreshToken) throw new Error('No refresh token')
-        const { data } = await axios.post('/api/auth/refresh', { refreshToken })
-        useAuthStore.getState().setAccessToken(data.accessToken)
-        // Guardar o refresh token rotado (o servidor invalida o anterior)
-        if (data.refreshToken) {
-          useAuthStore.setState({ refreshToken: data.refreshToken })
+        if (!refreshPromise) {
+          refreshPromise = (async () => {
+            const refreshToken = useAuthStore.getState().refreshToken
+            if (!refreshToken) throw new Error('No refresh token')
+            const { data } = await axios.post('/api/auth/refresh', { refreshToken })
+            useAuthStore.getState().setAccessToken(data.accessToken)
+            if (data.refreshToken) {
+              useAuthStore.setState({ refreshToken: data.refreshToken })
+            }
+            return data.accessToken as string
+          })().finally(() => { refreshPromise = null })
         }
-        original.headers.Authorization = `Bearer ${data.accessToken}`
+        const newAccessToken = await refreshPromise
+        original.headers.Authorization = `Bearer ${newAccessToken}`
         return api(original)
       } catch {
         useAuthStore.getState().logout()

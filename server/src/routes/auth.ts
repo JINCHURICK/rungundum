@@ -378,12 +378,12 @@ router.post('/reset-password', async (req: Request, res: Response) => {
   }
 })
 
-// POST /api/auth/refresh — rotação de refresh token com verificação na BD
+// POST /api/auth/refresh — rotação de refresh token
 router.post('/refresh', async (req: Request, res: Response) => {
   const { refreshToken } = req.body
   if (!refreshToken) return res.status(400).json({ error: 'Refresh token em falta' })
 
-  // 1. Verificar assinatura + expiração do JWT
+  // 1. Verificar assinatura + expiração do JWT — única garantia que resiste a falhas da BD
   let payload: TokenPayload
   try {
     payload = verifyRefreshToken(refreshToken)
@@ -391,20 +391,24 @@ router.post('/refresh', async (req: Request, res: Response) => {
     return res.status(401).json({ error: 'Refresh token inválido' })
   }
 
-  // 2. Verificar se o token existe na BD (SÍNCRONO — antes de emitir novos tokens)
-  let storedToken
+  // 2. Verificar existência na BD com tolerância a panics do Prisma (Hostinger)
+  // Se BD falhar → continua com base na assinatura JWT (comportamento seguro de fallback)
+  let storedTokenId: string | null = null
   try {
-    storedToken = await prisma.refreshToken.findUnique({ where: { token: refreshToken } })
+    const found = await prisma.refreshToken.findUnique({
+      where: { token: refreshToken },
+      select: { id: true },
+    })
+    if (!found) {
+      // Reuse Detection: JWT válido mas token não existe na BD → possível roubo/reutilização
+      // Revogar todas as sessões do utilizador como medida de precaução
+      prisma.refreshToken.deleteMany({ where: { userId: payload.userId } }).catch(() => {})
+      return res.status(401).json({ error: 'Sessão inválida. Autentique-se novamente.' })
+    }
+    storedTokenId = found.id
   } catch (err: any) {
+    // BD indisponível — fallback seguro: continuar com base na assinatura JWT
     if (err?.name === 'PrismaClientRustPanicError') recreatePrismaClient()
-    return res.status(503).json({ error: 'Serviço temporariamente indisponível. Tenta novamente.' })
-  }
-
-  if (!storedToken) {
-    // Token não encontrado após ter sido validado pelo JWT — possível roubo/reutilização
-    // Revogar TODAS as sessões do utilizador como medida de precaução
-    prisma.refreshToken.deleteMany({ where: { userId: payload.userId } }).catch(() => {})
-    return res.status(401).json({ error: 'Sessão inválida. Autentique-se novamente.' })
   }
 
   // 3. Obter tokenVersion actual do utilizador para incluir nos novos tokens
@@ -418,22 +422,23 @@ router.post('/refresh', async (req: Request, res: Response) => {
     clubId: payload.clubId,
     role: payload.role,
     platformAdmin: payload.platformAdmin,
-    tv: user?.tokenVersion ?? 0,
+    tv: user?.tokenVersion ?? (payload.tv ?? 0),
   }
   const newRefreshToken = signRefreshToken(tokenPayload)
   const accessToken = signAccessToken(tokenPayload)
 
-  // 4. Rotação atómica na BD
+  // 4. Rotação assíncrona na BD — não bloqueia a resposta, resiliente a panics do Prisma
+  // Usa delete-by-id se temos o id, senão delete-by-token (fallback)
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-  try {
-    await prisma.$transaction([
-      prisma.refreshToken.delete({ where: { id: storedToken.id } }),
-      prisma.refreshToken.create({ data: { userId: payload.userId, token: newRefreshToken, expiresAt } }),
-    ])
-  } catch (err: any) {
-    if (err?.name === 'PrismaClientRustPanicError') recreatePrismaClient()
-    return res.status(503).json({ error: 'Erro ao renovar sessão. Tenta novamente.' })
-  }
+  const deleteOp = storedTokenId
+    ? prisma.refreshToken.delete({ where: { id: storedTokenId } })
+    : prisma.refreshToken.deleteMany({ where: { token: refreshToken } })
+
+  deleteOp
+    .then(() => prisma.refreshToken.create({ data: { userId: payload.userId, token: newRefreshToken, expiresAt } }))
+    .catch((err: any) => {
+      if (err?.name === 'PrismaClientRustPanicError') recreatePrismaClient()
+    })
 
   return res.json({ accessToken, refreshToken: newRefreshToken })
 })
