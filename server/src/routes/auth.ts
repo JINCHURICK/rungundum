@@ -383,7 +383,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
   const { refreshToken } = req.body
   if (!refreshToken) return res.status(400).json({ error: 'Refresh token em falta' })
 
-  // 1. Verificar assinatura + expiração do JWT — única garantia que resiste a falhas da BD
+  // 1. JWT é a garantia principal — se a assinatura for inválida, rejeitar
   let payload: TokenPayload
   try {
     payload = verifyRefreshToken(refreshToken)
@@ -391,27 +391,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
     return res.status(401).json({ error: 'Refresh token inválido' })
   }
 
-  // 2. Verificar existência na BD com tolerância a panics do Prisma (Hostinger)
-  // Se BD falhar → continua com base na assinatura JWT (comportamento seguro de fallback)
-  let storedTokenId: string | null = null
-  try {
-    const found = await prisma.refreshToken.findUnique({
-      where: { token: refreshToken },
-      select: { id: true },
-    })
-    if (!found) {
-      // Reuse Detection: JWT válido mas token não existe na BD → possível roubo/reutilização
-      // Revogar todas as sessões do utilizador como medida de precaução
-      prisma.refreshToken.deleteMany({ where: { userId: payload.userId } }).catch(() => {})
-      return res.status(401).json({ error: 'Sessão inválida. Autentique-se novamente.' })
-    }
-    storedTokenId = found.id
-  } catch (err: any) {
-    // BD indisponível — fallback seguro: continuar com base na assinatura JWT
-    if (err?.name === 'PrismaClientRustPanicError') recreatePrismaClient()
-  }
-
-  // 3. Obter tokenVersion actual do utilizador para incluir nos novos tokens
+  // 2. Obter tokenVersion actual para incluir nos novos tokens (best-effort)
   const user = await prisma.user.findUnique({
     where: { id: payload.userId },
     select: { tokenVersion: true },
@@ -427,15 +407,13 @@ router.post('/refresh', async (req: Request, res: Response) => {
   const newRefreshToken = signRefreshToken(tokenPayload)
   const accessToken = signAccessToken(tokenPayload)
 
-  // 4. Rotação assíncrona na BD — não bloqueia a resposta, resiliente a panics do Prisma
-  // Usa delete-by-id se temos o id, senão delete-by-token (fallback)
+  // 3. Rotação assíncrona — CREATE primeiro, depois DELETE
+  // Ordem invertida garante que existe sempre pelo menos um token válido na BD,
+  // mesmo que o Prisma faça panic entre as duas operações no Hostinger.
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-  const deleteOp = storedTokenId
-    ? prisma.refreshToken.delete({ where: { id: storedTokenId } })
-    : prisma.refreshToken.deleteMany({ where: { token: refreshToken } })
-
-  deleteOp
-    .then(() => prisma.refreshToken.create({ data: { userId: payload.userId, token: newRefreshToken, expiresAt } }))
+  prisma.refreshToken
+    .create({ data: { userId: payload.userId, token: newRefreshToken, expiresAt } })
+    .then(() => prisma.refreshToken.deleteMany({ where: { token: refreshToken } }))
     .catch((err: any) => {
       if (err?.name === 'PrismaClientRustPanicError') recreatePrismaClient()
     })
