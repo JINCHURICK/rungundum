@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Bell, BellOff } from 'lucide-react'
 import { api } from '@/lib/api'
@@ -12,7 +13,9 @@ function typeIcon(type: string) {
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState({ top: 0, right: 0 })
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const qc = useQueryClient()
   const push = usePushNotifications()
 
@@ -35,18 +38,100 @@ export default function NotificationBell() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   })
 
+  // Fechar ao clicar fora (funciona mesmo com portal)
   useEffect(() => {
     function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      const target = e.target as Node
+      if (
+        buttonRef.current?.contains(target) ||
+        dropdownRef.current?.contains(target)
+      ) return
+      setOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  function handleToggle() {
+    if (!open && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect()
+      setPos({
+        top: rect.bottom + 8,
+        right: window.innerWidth - rect.right,
+      })
+    }
+    setOpen((v) => !v)
+  }
+
+  const dropdown = (
+    <div
+      ref={dropdownRef}
+      className="fixed w-80 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden"
+      style={{ top: pos.top, right: pos.right, zIndex: 9999 }}
+    >
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+        <p className="text-sm font-semibold text-gray-900">Notificações</p>
+        {unreadCount > 0 && (
+          <button
+            onClick={() => readAll.mutate()}
+            className="text-xs font-medium hover:underline"
+            style={{ color: 'var(--accent)' }}
+          >
+            Marcar todas como lidas
+          </button>
+        )}
+      </div>
+
+      <div className="max-h-80 overflow-y-auto">
+        {notifications.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-8">Sem notificações</p>
+        ) : (
+          notifications.map((n: any) => (
+            <div
+              key={n.id}
+              className={`flex gap-3 px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer ${!n.read ? 'bg-red-50/40' : ''}`}
+              onClick={() => { if (!n.read) readOne.mutate(n.id); setOpen(false) }}
+            >
+              <span className="text-lg flex-shrink-0 mt-0.5">{typeIcon(n.type)}</span>
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm leading-snug ${!n.read ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
+                  {n.link ? (
+                    <Link to={n.link} className="hover:underline" onClick={() => setOpen(false)}>{n.title}</Link>
+                  ) : n.title}
+                </p>
+                {n.body && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.body}</p>}
+                <p className="text-xs text-gray-400 mt-1">{formatShortDate(n.createdAt)}</p>
+              </div>
+              {!n.read && <div className="w-2 h-2 rounded-full flex-shrink-0 mt-2" style={{ backgroundColor: 'var(--accent)' }} />}
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Botão de notificações push */}
+      {push.isSupported && push.permission !== 'denied' && (
+        <div className="px-4 py-3 border-t border-gray-100">
+          <button
+            onClick={push.isSubscribed ? push.unsubscribe : push.subscribe}
+            disabled={push.isLoading}
+            className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-medium transition-colors border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
+          >
+            {push.isSubscribed ? (
+              <><BellOff size={13} className="text-gray-400" /> Desativar notificações push</>
+            ) : (
+              <><Bell size={13} style={{ color: 'var(--accent)' }} /> Ativar notificações push</>
+            )}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+
   return (
-    <div ref={ref} className="relative">
+    <>
       <button
-        onClick={() => setOpen((v) => !v)}
+        ref={buttonRef}
+        onClick={handleToggle}
         className="relative p-2 rounded-xl text-gray-500 hover:bg-gray-100 transition-colors"
         aria-label="Notificações"
       >
@@ -58,65 +143,7 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {open && (
-        <div className="absolute right-0 top-10 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-            <p className="text-sm font-semibold text-gray-900">Notificações</p>
-            {unreadCount > 0 && (
-              <button
-                onClick={() => readAll.mutate()}
-                className="text-xs font-medium hover:underline"
-                style={{ color: 'var(--accent)' }}
-              >
-                Marcar todas como lidas
-              </button>
-            )}
-          </div>
-
-          <div className="max-h-80 overflow-y-auto">
-            {notifications.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-8">Sem notificações</p>
-            ) : (
-              notifications.map((n: any) => (
-                <div
-                  key={n.id}
-                  className={`flex gap-3 px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer ${!n.read ? 'bg-red-50/40' : ''}`}
-                  onClick={() => { if (!n.read) readOne.mutate(n.id); setOpen(false) }}
-                >
-                  <span className="text-lg flex-shrink-0 mt-0.5">{typeIcon(n.type)}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm leading-snug ${!n.read ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
-                      {n.link ? (
-                        <Link to={n.link} className="hover:underline">{n.title}</Link>
-                      ) : n.title}
-                    </p>
-                    {n.body && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.body}</p>}
-                    <p className="text-xs text-gray-400 mt-1">{formatShortDate(n.createdAt)}</p>
-                  </div>
-                  {!n.read && <div className="w-2 h-2 rounded-full flex-shrink-0 mt-2" style={{ backgroundColor: 'var(--accent)' }} />}
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Botão de notificações push */}
-          {push.isSupported && push.permission !== 'denied' && (
-            <div className="px-4 py-3 border-t border-gray-100">
-              <button
-                onClick={push.isSubscribed ? push.unsubscribe : push.subscribe}
-                disabled={push.isLoading}
-                className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-medium transition-colors border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
-              >
-                {push.isSubscribed ? (
-                  <><BellOff size={13} className="text-gray-400" /> Desativar notificações push</>
-                ) : (
-                  <><Bell size={13} style={{ color: 'var(--accent)' }} /> Ativar notificações push</>
-                )}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+      {open && createPortal(dropdown, document.body)}
+    </>
   )
 }
