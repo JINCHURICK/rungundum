@@ -1,7 +1,7 @@
 // Service Worker — Rungundum PWA
 // Versão: 2.0 — Push Notifications + Offline Cache
 
-const CACHE_VERSION = 'rg-v3'
+const CACHE_VERSION = 'rg-v4'
 const SHELL_CACHE   = `${CACHE_VERSION}-shell`
 const ASSETS_CACHE  = `${CACHE_VERSION}-assets`
 const API_CACHE     = `${CACHE_VERSION}-api`
