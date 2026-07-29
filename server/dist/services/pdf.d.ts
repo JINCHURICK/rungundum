@@ -10,5 +10,12 @@ interface PDFOptions {
 }
 export declare function generateRaidPDF(raid: any, club: any, options?: PDFOptions): Promise<Buffer>;
 export declare function generateMemberCertificate(member: any, club: any, year: number): Promise<Buffer>;
+export declare function generateAnnualReport(params: {
+    club: any;
+    year: number;
+    raids: any[];
+    members: any[];
+    transactions: any[];
+}): Promise<Buffer>;
 export {};
 //# sourceMappingURL=pdf.d.ts.map

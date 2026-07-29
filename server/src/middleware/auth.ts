@@ -1,24 +1,41 @@
 import { Request, Response, NextFunction } from 'express'
 import { verifyAccessToken, TokenPayload } from '../lib/jwt'
 import { can, PermKey } from '../lib/permissions'
+import { prisma } from '../lib/prisma'
 
 export interface AuthRequest extends Request {
   user?: TokenPayload
 }
 
-export function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
+export async function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization
   if (!authHeader?.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Token de acesso em falta' })
   }
 
   const token = authHeader.slice(7)
+  let payload: TokenPayload
   try {
-    req.user = verifyAccessToken(token)
-    next()
+    payload = verifyAccessToken(token)
   } catch {
     return res.status(401).json({ error: 'Token inválido ou expirado' })
   }
+
+  // Verificar tokenVersion na BD — garante revogação imediata após logout, reset de password ou alteração de role
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { tokenVersion: true },
+    })
+    if (!user || user.tokenVersion !== (payload.tv ?? 0)) {
+      return res.status(401).json({ error: 'Sessão inválida. Autentique-se novamente.' })
+    }
+  } catch {
+    // Se BD falhar, deixar passar com base na assinatura JWT (disponibilidade prioritária em Hostinger)
+  }
+
+  req.user = payload
+  next()
 }
 
 export function requireRole(...roles: string[]) {

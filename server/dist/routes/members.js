@@ -203,7 +203,8 @@ router.patch('/:id', (0, auth_1.requirePermission)('MEMBERS_WRITE'), async (req,
         const member = await prisma_1.prisma.$transaction(async (tx) => {
             // Actualizar papel do utilizador associado
             if (role && existing.user) {
-                await tx.user.update({ where: { id: existing.user.id }, data: { role } });
+                // Incrementar tokenVersion invalida imediatamente todos os access tokens activos com o role antigo
+                await tx.user.update({ where: { id: existing.user.id }, data: { role, tokenVersion: { increment: 1 } } });
             }
             return tx.member.update({
                 where: { id: req.params.id },

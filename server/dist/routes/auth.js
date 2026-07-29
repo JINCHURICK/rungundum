@@ -84,8 +84,8 @@ function buildAuthResponse(user, club, memberId, memberPhotoUrl) {
         club: { id: club.id, name: club.name, acronym: club.acronym, accentColor: club.accentColor, logoUrl: club.logoUrl },
     };
 }
-async function createSession(userId, clubId, role, platformAdmin = false) {
-    const payload = { userId, clubId, role, platformAdmin };
+async function createSession(userId, clubId, role, platformAdmin = false, tokenVersion = 0) {
+    const payload = { userId, clubId, role, platformAdmin, tv: tokenVersion };
     const accessToken = (0, jwt_1.signAccessToken)(payload);
     const refreshToken = (0, jwt_1.signRefreshToken)(payload);
     // Sessão única: invalida todas as sessões anteriores do utilizador
@@ -184,7 +184,7 @@ router.post('/verify-email', async (req, res) => {
             where: { id: user.id },
             data: { emailVerified: true, verificationToken: null, verificationExpires: null },
         });
-        const { accessToken, refreshToken } = await createSession(user.id, user.clubId, user.role, user.platformAdmin);
+        const { accessToken, refreshToken } = await createSession(user.id, user.clubId, user.role, user.platformAdmin, user.tokenVersion);
         return res.json({ accessToken, refreshToken, ...buildAuthResponse(user, user.club, user.member?.id, user.member?.photoUrl) });
     }
     catch (err) {
@@ -284,7 +284,7 @@ router.post('/verify-2fa', twoFALimiter, async (req, res) => {
         }
         await prisma_1.prisma.pendingAuth.delete({ where: { id: pending.id } });
         const { user } = pending;
-        const { accessToken, refreshToken } = await createSession(user.id, user.clubId, user.role, user.platformAdmin);
+        const { accessToken, refreshToken } = await createSession(user.id, user.clubId, user.role, user.platformAdmin, user.tokenVersion);
         return res.json({ accessToken, refreshToken, ...buildAuthResponse(user, user.club, user.member?.id, user.member?.photoUrl) });
     }
     catch (err) {
@@ -301,14 +301,16 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
         // Resposta genérica para não revelar se o email existe
         if (!user)
             return res.json({ message: 'Se o email existir, receberás um link.' });
-        const token = (0, crypto_1.randomBytes)(32).toString('hex');
+        const rawToken = (0, crypto_1.randomBytes)(32).toString('hex');
+        const hashToken = (0, crypto_1.createHash)('sha256').update(rawToken).digest('hex');
         const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
         await prisma_1.prisma.user.update({
             where: { id: user.id },
-            data: { resetToken: token, resetTokenExpiresAt: expiresAt },
+            data: { resetToken: hashToken, resetTokenExpiresAt: expiresAt },
         });
+        // Enviar o token RAW no URL — guardar apenas o HASH na BD
         const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5173';
-        (0, email_1.sendPasswordReset)({ to: user.email, resetUrl: `${clientUrl}/reset-password/${token}`, clubName: user.club.name })
+        (0, email_1.sendPasswordReset)({ to: user.email, resetUrl: `${clientUrl}/reset-password/${rawToken}`, clubName: user.club.name })
             .catch(err => console.error('[Email reset]', err.message));
         return res.json({ message: 'Se o email existir, receberás um link.' });
     }
@@ -323,14 +325,21 @@ router.post('/reset-password', async (req, res) => {
     try {
         const schema = zod_1.z.object({ token: zod_1.z.string(), password: zod_1.z.string().min(8) });
         const { token, password } = schema.parse(req.body);
-        const user = await prisma_1.prisma.user.findUnique({ where: { resetToken: token } });
+        // Comparar o hash do token recebido — token em plaintext nunca é guardado na BD
+        const hashToken = (0, crypto_1.createHash)('sha256').update(token).digest('hex');
+        const user = await prisma_1.prisma.user.findUnique({ where: { resetToken: hashToken } });
         if (!user || !user.resetTokenExpiresAt || user.resetTokenExpiresAt < new Date()) {
             return res.status(400).json({ error: 'Link inválido ou expirado.' });
         }
         const passwordHash = await bcryptjs_1.default.hash(password, 10);
         await prisma_1.prisma.user.update({
             where: { id: user.id },
-            data: { passwordHash, resetToken: null, resetTokenExpiresAt: null },
+            data: {
+                passwordHash,
+                resetToken: null,
+                resetTokenExpiresAt: null,
+                tokenVersion: { increment: 1 }, // invalida todos os access tokens activos imediatamente
+            },
         });
         // Invalidar todas as sessões existentes
         await prisma_1.prisma.refreshToken.deleteMany({ where: { userId: user.id } });
@@ -342,14 +351,12 @@ router.post('/reset-password', async (req, res) => {
         throw err;
     }
 });
-// POST /api/auth/refresh — rotação de refresh token
-// A validação é feita via JWT (sem Prisma) para que Prisma panics não quebrem a sessão.
-// A rotação na BD é feita de forma assíncrona — a resposta é enviada independentemente.
+// POST /api/auth/refresh — rotação de refresh token com verificação na BD
 router.post('/refresh', async (req, res) => {
     const { refreshToken } = req.body;
     if (!refreshToken)
         return res.status(400).json({ error: 'Refresh token em falta' });
-    // Valida assinatura + expiração do JWT — lança se inválido ou expirado
+    // 1. Verificar assinatura + expiração do JWT
     let payload;
     try {
         payload = (0, jwt_1.verifyRefreshToken)(refreshToken);
@@ -357,29 +364,59 @@ router.post('/refresh', async (req, res) => {
     catch {
         return res.status(401).json({ error: 'Refresh token inválido' });
     }
+    // 2. Verificar se o token existe na BD (SÍNCRONO — antes de emitir novos tokens)
+    let storedToken;
+    try {
+        storedToken = await prisma_1.prisma.refreshToken.findUnique({ where: { token: refreshToken } });
+    }
+    catch (err) {
+        if (err?.name === 'PrismaClientRustPanicError')
+            (0, prisma_2.recreatePrismaClient)();
+        return res.status(503).json({ error: 'Serviço temporariamente indisponível. Tenta novamente.' });
+    }
+    if (!storedToken) {
+        // Token não encontrado após ter sido validado pelo JWT — possível roubo/reutilização
+        // Revogar TODAS as sessões do utilizador como medida de precaução
+        prisma_1.prisma.refreshToken.deleteMany({ where: { userId: payload.userId } }).catch(() => { });
+        return res.status(401).json({ error: 'Sessão inválida. Autentique-se novamente.' });
+    }
+    // 3. Obter tokenVersion actual do utilizador para incluir nos novos tokens
+    const user = await prisma_1.prisma.user.findUnique({
+        where: { id: payload.userId },
+        select: { tokenVersion: true },
+    }).catch(() => null);
     const tokenPayload = {
         userId: payload.userId,
         clubId: payload.clubId,
         role: payload.role,
         platformAdmin: payload.platformAdmin,
+        tv: user?.tokenVersion ?? 0,
     };
     const newRefreshToken = (0, jwt_1.signRefreshToken)(tokenPayload);
     const accessToken = (0, jwt_1.signAccessToken)(tokenPayload);
-    // Rotar token na BD de forma assíncrona — não bloqueia a resposta
+    // 4. Rotação atómica na BD
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    prisma_1.prisma.refreshToken.deleteMany({ where: { token: refreshToken } })
-        .then(() => prisma_1.prisma.refreshToken.create({ data: { userId: payload.userId, token: newRefreshToken, expiresAt } }))
-        .catch((err) => {
+    try {
+        await prisma_1.prisma.$transaction([
+            prisma_1.prisma.refreshToken.delete({ where: { id: storedToken.id } }),
+            prisma_1.prisma.refreshToken.create({ data: { userId: payload.userId, token: newRefreshToken, expiresAt } }),
+        ]);
+    }
+    catch (err) {
         if (err?.name === 'PrismaClientRustPanicError')
             (0, prisma_2.recreatePrismaClient)();
-    });
+        return res.status(503).json({ error: 'Erro ao renovar sessão. Tenta novamente.' });
+    }
     return res.json({ accessToken, refreshToken: newRefreshToken });
 });
 // POST /api/auth/logout
 router.post('/logout', auth_1.authenticate, async (req, res) => {
-    const { refreshToken } = req.body;
-    if (refreshToken)
-        await prisma_1.prisma.refreshToken.deleteMany({ where: { token: refreshToken } });
+    const userId = req.user.userId;
+    // Revogar todos os refresh tokens E incrementar tokenVersion para invalidar access tokens activos imediatamente
+    await Promise.all([
+        prisma_1.prisma.refreshToken.deleteMany({ where: { userId } }),
+        prisma_1.prisma.user.update({ where: { id: userId }, data: { tokenVersion: { increment: 1 } } }),
+    ]).catch(() => { });
     return res.json({ message: 'Sessão terminada' });
 });
 // GET /api/auth/invite/:token
@@ -434,8 +471,13 @@ router.get('/me', auth_1.authenticate, async (req, res) => {
     return res.json(buildAuthResponse(user, user.club, user.member?.id, user.member?.photoUrl));
 });
 // DEV ONLY — endpoint para testes automáticos obterem o código 2FA da BD
+// Protegido por DEV_SECRET mesmo em desenvolvimento — nunca expor em produção
 if (process.env.NODE_ENV !== 'production') {
+    const DEV_SECRET = process.env.DEV_SECRET;
     router.get('/dev/pending-code/:email', async (req, res) => {
+        if (DEV_SECRET && req.headers['x-dev-secret'] !== DEV_SECRET) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
         const user = await prisma_1.prisma.user.findUnique({ where: { email: req.params.email } });
         if (!user)
             return res.status(404).json({ error: 'Utilizador não encontrado' });

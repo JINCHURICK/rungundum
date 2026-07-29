@@ -10,15 +10,15 @@ export declare function createQuotaTransaction(p: {
     paidAt: Date;
     createdById: string;
 }): Promise<{
+    id: string;
+    clubId: string;
+    createdAt: Date;
+    updatedAt: Date;
     date: Date;
     type: import(".prisma/client").$Enums.TransactionType;
-    id: string;
-    createdAt: Date;
-    clubId: string;
-    updatedAt: Date;
     notes: string | null;
-    memberId: string | null;
     description: string;
+    memberId: string | null;
     category: string;
     amount: number;
     reference: string | null;

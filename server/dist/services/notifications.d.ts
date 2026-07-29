@@ -6,11 +6,11 @@ export declare function createNotification(params: {
     body?: string;
     link?: string;
 }): Promise<{
+    id: string;
+    clubId: string;
+    createdAt: Date;
     type: string;
     userId: string;
-    id: string;
-    createdAt: Date;
-    clubId: string;
     title: string;
     body: string | null;
     link: string | null;

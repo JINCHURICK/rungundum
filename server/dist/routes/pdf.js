@@ -27,7 +27,10 @@ router.post('/raids/:id', async (req, res) => {
     });
     if (!raid)
         return res.status(404).json({ error: 'Raid não encontrado' });
-    const club = await prisma_1.prisma.club.findUnique({ where: { id: req.user.clubId } });
+    const [club, handSignals] = await Promise.all([
+        prisma_1.prisma.club.findUnique({ where: { id: req.user.clubId } }),
+        prisma_1.prisma.handSignal.findMany({ where: { clubId: req.user.clubId }, orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] }),
+    ]);
     if (!club)
         return res.status(404).json({ error: 'Clube não encontrado' });
     const optionsSchema = zod_1.z.object({
@@ -41,7 +44,7 @@ router.post('/raids/:id', async (req, res) => {
         includeSignatures: zod_1.z.boolean().optional(),
     });
     const options = optionsSchema.parse(req.body);
-    const pdf = await (0, pdf_1.generateRaidPDF)(raid, club, options);
+    const pdf = await (0, pdf_1.generateRaidPDF)(raid, { ...club, handSignals }, options);
     const clean = (s) => s.replace(/[<>:"/\\|?*]/g, '').trim();
     const dateStr = (0, date_fns_1.format)(new Date(raid.date), 'dd-MM-yyyy');
     const filename = `Plano de Raid - ${clean(raid.origin)} a ${clean(raid.destination)} - ${dateStr}.pdf`;
@@ -121,6 +124,43 @@ router.post('/members/:memberId/certificate', async (req, res) => {
     const clean = (s) => s.replace(/[<>:"/\\|?*]/g, '').trim();
     const name = clean(member.nickname ?? member.fullName);
     const filename = `Certificado - ${name} - ${year}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    return res.send(pdf);
+});
+// POST /api/pdf/annual-report
+router.post('/annual-report', async (req, res) => {
+    const yearRaw = req.body?.year;
+    const year = yearRaw && !isNaN(Number(yearRaw)) ? Number(yearRaw) : new Date().getFullYear();
+    const clubId = req.user.clubId;
+    const start = new Date(`${year}-01-01T00:00:00.000Z`);
+    const end = new Date(`${year}-12-31T23:59:59.999Z`);
+    const [club, raids, members, transactions] = await Promise.all([
+        prisma_1.prisma.club.findUnique({ where: { id: clubId } }),
+        prisma_1.prisma.raid.findMany({
+            where: { clubId, date: { gte: start, lte: end } },
+            include: {
+                participants: {
+                    where: { status: 'CONFIRMED' },
+                    include: { member: { select: { fullName: true, nickname: true } } },
+                },
+            },
+            orderBy: { date: 'asc' },
+        }),
+        prisma_1.prisma.member.findMany({
+            where: { clubId },
+            select: { id: true, fullName: true, nickname: true, status: true, joinedAt: true },
+        }),
+        prisma_1.prisma.transaction.findMany({
+            where: { clubId, date: { gte: start, lte: end } },
+            select: { type: true, amount: true, category: true },
+        }),
+    ]);
+    if (!club)
+        return res.status(404).json({ error: 'Clube não encontrado' });
+    const pdf = await (0, pdf_1.generateAnnualReport)({ club, year, raids, members, transactions });
+    const clean = (s) => s.replace(/[<>:"/\\|?*]/g, '').trim();
+    const filename = `Relatorio Anual - ${clean(club.name)} - ${year}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
     return res.send(pdf);

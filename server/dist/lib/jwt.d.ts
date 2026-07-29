@@ -3,6 +3,7 @@ export interface TokenPayload {
     clubId: string;
     role: string;
     platformAdmin?: boolean;
+    tv?: number;
 }
 export declare function signAccessToken(payload: TokenPayload): string;
 export declare function signRefreshToken(payload: TokenPayload): string;

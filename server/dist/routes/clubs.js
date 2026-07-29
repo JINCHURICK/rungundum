@@ -109,5 +109,84 @@ router.delete('/me/emergency-contacts/:id', (0, auth_1.requireRole)('ADMIN', 'CA
     await prisma_1.prisma.emergencyContact.delete({ where: { id: req.params.id } });
     return res.json({ message: 'Contacto eliminado' });
 });
+// ── Sinais de Mão ─────────────────────────────────────────────────────────────
+// GET /api/clubs/me/hand-signals
+router.get('/me/hand-signals', async (req, res) => {
+    const signals = await prisma_1.prisma.handSignal.findMany({
+        where: { clubId: req.user.clubId },
+        orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+    });
+    return res.json(signals);
+});
+const handSignalSchema = zod_1.z.object({
+    name: zod_1.z.string().min(1, 'Nome obrigatório').max(100),
+    description: zod_1.z.string().optional(),
+    order: zod_1.z.number().int().optional(),
+});
+// POST /api/clubs/me/hand-signals
+router.post('/me/hand-signals', (0, auth_1.requireRole)('ADMIN', 'CAPTAIN'), async (req, res) => {
+    try {
+        const data = handSignalSchema.parse(req.body);
+        const maxOrder = await prisma_1.prisma.handSignal.count({ where: { clubId: req.user.clubId } });
+        const signal = await prisma_1.prisma.handSignal.create({
+            data: { ...data, clubId: req.user.clubId, order: data.order ?? maxOrder },
+        });
+        return res.status(201).json(signal);
+    }
+    catch (err) {
+        if (err instanceof zod_1.z.ZodError)
+            return res.status(400).json({ error: err.errors });
+        throw err;
+    }
+});
+// PATCH /api/clubs/me/hand-signals/:id
+router.patch('/me/hand-signals/:id', (0, auth_1.requireRole)('ADMIN', 'CAPTAIN'), async (req, res) => {
+    try {
+        const signal = await prisma_1.prisma.handSignal.findFirst({ where: { id: req.params.id, clubId: req.user.clubId } });
+        if (!signal)
+            return res.status(404).json({ error: 'Sinal não encontrado' });
+        const data = handSignalSchema.partial().parse(req.body);
+        const updated = await prisma_1.prisma.handSignal.update({ where: { id: req.params.id }, data });
+        return res.json(updated);
+    }
+    catch (err) {
+        if (err instanceof zod_1.z.ZodError)
+            return res.status(400).json({ error: err.errors });
+        throw err;
+    }
+});
+// DELETE /api/clubs/me/hand-signals/:id
+router.delete('/me/hand-signals/:id', (0, auth_1.requireRole)('ADMIN', 'CAPTAIN'), async (req, res) => {
+    const signal = await prisma_1.prisma.handSignal.findFirst({ where: { id: req.params.id, clubId: req.user.clubId } });
+    if (!signal)
+        return res.status(404).json({ error: 'Sinal não encontrado' });
+    await prisma_1.prisma.handSignal.delete({ where: { id: req.params.id } });
+    return res.json({ message: 'Sinal eliminado' });
+});
+// POST /api/clubs/me/hand-signals/:id/image
+router.post('/me/hand-signals/:id/image', (0, auth_1.requireRole)('ADMIN', 'CAPTAIN'), upload.single('image'), async (req, res) => {
+    if (!req.file)
+        return res.status(400).json({ error: 'Ficheiro em falta' });
+    const signal = await prisma_1.prisma.handSignal.findFirst({ where: { id: req.params.id, clubId: req.user.clubId } });
+    if (!signal)
+        return res.status(404).json({ error: 'Sinal não encontrado' });
+    const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${req.user.clubId}/hand-signals/${req.params.id}`);
+    const updated = await prisma_1.prisma.handSignal.update({ where: { id: req.params.id }, data: { imageUrl: url } });
+    return res.json({ imageUrl: updated.imageUrl });
+});
+// PUT /api/clubs/me/hand-signals/reorder — actualizar ordem de vários sinais
+router.put('/me/hand-signals/reorder', (0, auth_1.requireRole)('ADMIN', 'CAPTAIN'), async (req, res) => {
+    const schema = zod_1.z.object({ ids: zod_1.z.array(zod_1.z.string()) });
+    try {
+        const { ids } = schema.parse(req.body);
+        await Promise.all(ids.map((id, index) => prisma_1.prisma.handSignal.updateMany({ where: { id, clubId: req.user.clubId }, data: { order: index } })));
+        return res.json({ message: 'Ordem actualizada' });
+    }
+    catch (err) {
+        if (err instanceof zod_1.z.ZodError)
+            return res.status(400).json({ error: err.errors });
+        throw err;
+    }
+});
 exports.default = router;
 //# sourceMappingURL=clubs.js.map

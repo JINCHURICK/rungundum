@@ -11,15 +11,15 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 function signAccessToken(payload) {
-    return jsonwebtoken_1.default.sign(payload, JWT_SECRET, { expiresIn: '15m' });
+    return jsonwebtoken_1.default.sign(payload, JWT_SECRET, { expiresIn: '15m', algorithm: 'HS256' });
 }
 function signRefreshToken(payload) {
-    return jsonwebtoken_1.default.sign(payload, JWT_REFRESH_SECRET, { expiresIn: '30d' });
+    return jsonwebtoken_1.default.sign(payload, JWT_REFRESH_SECRET, { expiresIn: '30d', algorithm: 'HS256' });
 }
 function verifyAccessToken(token) {
-    return jsonwebtoken_1.default.verify(token, JWT_SECRET);
+    return jsonwebtoken_1.default.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
 }
 function verifyRefreshToken(token) {
-    return jsonwebtoken_1.default.verify(token, JWT_REFRESH_SECRET);
+    return jsonwebtoken_1.default.verify(token, JWT_REFRESH_SECRET, { algorithms: ['HS256'] });
 }
 //# sourceMappingURL=jwt.js.map

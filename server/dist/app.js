@@ -51,6 +51,7 @@ app.use((0, helmet_1.default)({
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
             imgSrc: ["'self'", "data:", "https://res.cloudinary.com"],
             connectSrc: ["'self'"],
+            workerSrc: ["'self'"],
             frameSrc: ["'none'"],
             frameAncestors: ["'none'"],
             objectSrc: ["'none'"],
