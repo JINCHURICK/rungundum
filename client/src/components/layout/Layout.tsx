@@ -4,6 +4,7 @@ import { Menu, X } from 'lucide-react'
 import Sidebar from './Sidebar'
 import { useAuthStore } from '@/store/auth'
 import NotificationBell from '@/components/ui/NotificationBell'
+import OfflineBanner from '@/components/ui/OfflineBanner'
 
 export default function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -37,6 +38,7 @@ export default function Layout() {
 
       {/* Conteúdo principal */}
       <div className="flex-1 min-w-0 flex flex-col">
+        <OfflineBanner />
         {/* Header mobile */}
         <header
           className="lg:hidden sticky top-0 z-30 bg-white border-b border-gray-200 flex items-center gap-3 px-4 h-14"

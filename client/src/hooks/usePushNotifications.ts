@@ -37,8 +37,7 @@ export function usePushNotifications() {
     setIsLoading(true)
     try {
       const { data } = await api.get('/notifications/vapid-key')
-      const reg = await navigator.serviceWorker.register('/sw.js')
-      await navigator.serviceWorker.ready
+      const reg = await navigator.serviceWorker.ready
 
       const perm = await Notification.requestPermission()
       setPermission(perm)
