@@ -2,7 +2,7 @@ import { Router, Response } from 'express'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { authenticate, AuthRequest } from '../middleware/auth'
-import { generateRaidPDF, generateMemberCertificate } from '../services/pdf'
+import { generateRaidPDF, generateMemberCertificate, generateAnnualReport } from '../services/pdf'
 import { generateProgramImage, generateProgramPDF } from '../services/programImage'
 import { format } from 'date-fns'
 
@@ -27,7 +27,10 @@ router.post('/raids/:id', async (req: AuthRequest, res: Response) => {
   })
   if (!raid) return res.status(404).json({ error: 'Raid não encontrado' })
 
-  const club = await prisma.club.findUnique({ where: { id: req.user!.clubId } })
+  const [club, handSignals] = await Promise.all([
+    prisma.club.findUnique({ where: { id: req.user!.clubId } }),
+    prisma.handSignal.findMany({ where: { clubId: req.user!.clubId }, orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] }),
+  ])
   if (!club) return res.status(404).json({ error: 'Clube não encontrado' })
 
   const optionsSchema = z.object({
@@ -42,7 +45,7 @@ router.post('/raids/:id', async (req: AuthRequest, res: Response) => {
   })
 
   const options = optionsSchema.parse(req.body)
-  const pdf = await generateRaidPDF(raid, club, options)
+  const pdf = await generateRaidPDF(raid, { ...club, handSignals }, options)
 
   const clean = (s: string) => s.replace(/[<>:"/\\|?*]/g, '').trim()
   const dateStr = format(new Date(raid.date), 'dd-MM-yyyy')
@@ -134,6 +137,48 @@ router.post('/members/:memberId/certificate', async (req: AuthRequest, res: Resp
   const name = clean(member.nickname ?? member.fullName)
   const filename = `Certificado - ${name} - ${year}.pdf`
 
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`)
+  return res.send(pdf)
+})
+
+// POST /api/pdf/annual-report
+router.post('/annual-report', async (req: AuthRequest, res: Response) => {
+  const yearRaw = req.body?.year
+  const year = yearRaw && !isNaN(Number(yearRaw)) ? Number(yearRaw) : new Date().getFullYear()
+  const clubId = req.user!.clubId
+
+  const start = new Date(`${year}-01-01T00:00:00.000Z`)
+  const end   = new Date(`${year}-12-31T23:59:59.999Z`)
+
+  const [club, raids, members, transactions] = await Promise.all([
+    prisma.club.findUnique({ where: { id: clubId } }),
+    prisma.raid.findMany({
+      where: { clubId, date: { gte: start, lte: end } },
+      include: {
+        participants: {
+          where: { status: 'CONFIRMED' },
+          include: { member: { select: { fullName: true, nickname: true } } },
+        },
+      },
+      orderBy: { date: 'asc' },
+    }),
+    prisma.member.findMany({
+      where: { clubId },
+      select: { id: true, fullName: true, nickname: true, status: true, joinedAt: true },
+    }),
+    prisma.transaction.findMany({
+      where: { clubId, date: { gte: start, lte: end } },
+      select: { type: true, amount: true, category: true },
+    }),
+  ])
+
+  if (!club) return res.status(404).json({ error: 'Clube não encontrado' })
+
+  const pdf = await generateAnnualReport({ club, year, raids, members, transactions })
+
+  const clean = (s: string) => s.replace(/[<>:"/\\|?*]/g, '').trim()
+  const filename = `Relatorio Anual - ${clean(club.name)} - ${year}.pdf`
   res.setHeader('Content-Type', 'application/pdf')
   res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`)
   return res.send(pdf)

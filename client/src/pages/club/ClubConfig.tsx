@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
-import { Upload, Plus, Trash2, Save } from 'lucide-react'
+import { Upload, Plus, Trash2, Save, Pencil, Hand } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/store/auth'
 import { Button } from '@/components/ui/Button'
@@ -33,11 +33,20 @@ const contactSchema = z.object({
 })
 type ContactData = z.infer<typeof contactSchema>
 
+const handSignalSchema = z.object({
+  name:        z.string().min(1, 'Nome obrigatório').max(100),
+  description: z.string().optional(),
+})
+type HandSignalData = z.infer<typeof handSignalSchema>
+
 export default function ClubConfig() {
   const { setAuth, user, club: authClub, accessToken, refreshToken } = useAuthStore()
   const qc = useQueryClient()
   const logoInputRef = useRef<HTMLInputElement>(null)
   const [contactModal, setContactModal] = useState(false)
+  const [signalModal, setSignalModal] = useState(false)
+  const [editingSignal, setEditingSignal] = useState<any>(null)
+  const signalImageRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   const { data: club, isLoading } = useQuery({
     queryKey: ['club'],
@@ -47,6 +56,11 @@ export default function ClubConfig() {
   const { data: contacts = [] } = useQuery({
     queryKey: ['emergency-contacts'],
     queryFn: () => api.get('/clubs/me/emergency-contacts').then((r) => r.data),
+  })
+
+  const { data: handSignals = [] } = useQuery({
+    queryKey: ['hand-signals'],
+    queryFn: () => api.get('/clubs/me/hand-signals').then((r) => r.data),
   })
 
   const { register, handleSubmit, reset, watch, formState: { errors, isDirty } } = useForm<FormData>({
@@ -104,6 +118,40 @@ export default function ClubConfig() {
   })
 
   const contactForm = useForm<ContactData>({ resolver: zodResolver(contactSchema) })
+
+  const addSignalMutation = useMutation({
+    mutationFn: (data: HandSignalData) => api.post('/clubs/me/hand-signals', data).then((r) => r.data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['hand-signals'] }); setSignalModal(false); toast.success('Sinal adicionado!') },
+    onError: () => toast.error('Erro ao adicionar sinal'),
+  })
+
+  const updateSignalMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: HandSignalData }) => api.patch(`/clubs/me/hand-signals/${id}`, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['hand-signals'] }); setSignalModal(false); setEditingSignal(null); toast.success('Sinal actualizado!') },
+    onError: () => toast.error('Erro ao actualizar sinal'),
+  })
+
+  const deleteSignalMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/clubs/me/hand-signals/${id}`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['hand-signals'] }); toast.success('Sinal eliminado') },
+  })
+
+  const signalImageMutation = useMutation({
+    mutationFn: ({ id, file }: { id: string; file: File }) => {
+      const fd = new FormData(); fd.append('image', file)
+      return api.post(`/clubs/me/hand-signals/${id}/image`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['hand-signals'] }); toast.success('Imagem actualizada!') },
+    onError: () => toast.error('Erro ao fazer upload da imagem'),
+  })
+
+  const signalForm = useForm<HandSignalData>({ resolver: zodResolver(handSignalSchema) })
+
+  function openSignalModal(signal?: any) {
+    if (signal) { setEditingSignal(signal); signalForm.reset({ name: signal.name, description: signal.description ?? '' }) }
+    else { setEditingSignal(null); signalForm.reset({ name: '', description: '' }) }
+    setSignalModal(true)
+  }
 
   if (isLoading) return <div className="flex items-center justify-center h-64"><div className="animate-spin w-6 h-6 border-2 border-gray-200 rounded-full" style={{ borderTopColor: 'var(--accent)' }} /></div>
 
@@ -233,6 +281,110 @@ export default function ClubConfig() {
           )}
         </CardContent>
       </Card>
+
+      {/* Sinais de Mão */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Hand size={16} className="text-gray-500" />
+              <h3 className="font-semibold">Sinais de Mão</h3>
+            </div>
+            <Button size="sm" onClick={() => openSignalModal()}>
+              <Plus size={14} />
+              Adicionar
+            </Button>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">Lista de sinais usados em comboio. Aparecem no PDF do raid.</p>
+        </CardHeader>
+        <CardContent>
+          {handSignals.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-6">Nenhum sinal de mão configurado. Adicione os sinais usados pelo clube em comboio.</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {handSignals.map((s: any) => (
+                <div key={s.id} className="flex items-start gap-3 p-3 border border-gray-100 rounded-xl bg-gray-50">
+                  {/* Imagem / placeholder */}
+                  <div className="flex-shrink-0">
+                    {s.imageUrl ? (
+                      <img src={s.imageUrl} alt={s.name} className="w-14 h-14 rounded-lg object-cover border border-gray-200" />
+                    ) : (
+                      <div className="w-14 h-14 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center bg-white">
+                        <Hand size={20} className="text-gray-300" />
+                      </div>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      ref={(el) => { signalImageRefs.current[s.id] = el }}
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) signalImageMutation.mutate({ id: s.id, file: f }) }}
+                    />
+                    <button
+                      onClick={() => signalImageRefs.current[s.id]?.click()}
+                      className="mt-1 w-full text-center text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      <Upload size={11} className="inline mr-0.5" />foto
+                    </button>
+                  </div>
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{s.name}</p>
+                    {s.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{s.description}</p>}
+                  </div>
+                  {/* Acções */}
+                  <div className="flex flex-col gap-1 flex-shrink-0">
+                    <button onClick={() => openSignalModal(s)} className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-white rounded transition-colors">
+                      <Pencil size={13} />
+                    </button>
+                    <button onClick={() => deleteSignalMutation.mutate(s.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-white rounded transition-colors">
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Signal modal */}
+      <Modal
+        open={signalModal}
+        onClose={() => { setSignalModal(false); setEditingSignal(null) }}
+        title={editingSignal ? 'Editar Sinal de Mão' : 'Adicionar Sinal de Mão'}
+      >
+        <form
+          onSubmit={signalForm.handleSubmit((d) =>
+            editingSignal
+              ? updateSignalMutation.mutate({ id: editingSignal.id, data: d })
+              : addSignalMutation.mutate(d)
+          )}
+          className="space-y-4"
+        >
+          <Input
+            label="Nome do sinal *"
+            placeholder="Ex: Parar, Virar à esquerda, Combustível..."
+            error={signalForm.formState.errors.name?.message}
+            {...signalForm.register('name')}
+          />
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Descrição</label>
+            <textarea
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400"
+              rows={3}
+              placeholder="Como executar o sinal, o que significa..."
+              {...signalForm.register('description')}
+            />
+          </div>
+          <div className="flex gap-3 justify-end pt-1">
+            <Button type="button" variant="secondary" onClick={() => setSignalModal(false)}>Cancelar</Button>
+            <Button type="submit" loading={addSignalMutation.isPending || updateSignalMutation.isPending}>
+              {editingSignal ? 'Guardar' : 'Adicionar'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Contact modal */}
       <Modal open={contactModal} onClose={() => setContactModal(false)} title="Adicionar Contacto de Emergência">

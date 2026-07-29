@@ -43,6 +43,7 @@ model Club {
   transactions          Transaction[]
   announcements         Announcement[]
   positions             ClubPosition[]
+  handSignals           HandSignal[]
 
   @@map("clubs")
 }
@@ -683,6 +684,22 @@ model Notification {
   @@index([userId, read])
   @@index([clubId])
   @@map("notifications")
+}
+
+model HandSignal {
+  id          String   @id @default(cuid())
+  clubId      String
+  name        String
+  description String?  @db.Text
+  imageUrl    String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([clubId])
+  @@map("hand_signals")
 }
 
 model ClubPosition {

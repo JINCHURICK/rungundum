@@ -107,4 +107,83 @@ router.delete('/me/emergency-contacts/:id', requireRole('ADMIN', 'CAPTAIN'), asy
   return res.json({ message: 'Contacto eliminado' })
 })
 
+// ── Sinais de Mão ─────────────────────────────────────────────────────────────
+
+// GET /api/clubs/me/hand-signals
+router.get('/me/hand-signals', async (req: AuthRequest, res: Response) => {
+  const signals = await prisma.handSignal.findMany({
+    where: { clubId: req.user!.clubId },
+    orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+  })
+  return res.json(signals)
+})
+
+const handSignalSchema = z.object({
+  name:        z.string().min(1, 'Nome obrigatório').max(100),
+  description: z.string().optional(),
+  order:       z.number().int().optional(),
+})
+
+// POST /api/clubs/me/hand-signals
+router.post('/me/hand-signals', requireRole('ADMIN', 'CAPTAIN'), async (req: AuthRequest, res: Response) => {
+  try {
+    const data = handSignalSchema.parse(req.body)
+    const maxOrder = await prisma.handSignal.count({ where: { clubId: req.user!.clubId } })
+    const signal = await prisma.handSignal.create({
+      data: { ...data, clubId: req.user!.clubId, order: data.order ?? maxOrder },
+    })
+    return res.status(201).json(signal)
+  } catch (err) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors })
+    throw err
+  }
+})
+
+// PATCH /api/clubs/me/hand-signals/:id
+router.patch('/me/hand-signals/:id', requireRole('ADMIN', 'CAPTAIN'), async (req: AuthRequest, res: Response) => {
+  try {
+    const signal = await prisma.handSignal.findFirst({ where: { id: req.params.id, clubId: req.user!.clubId } })
+    if (!signal) return res.status(404).json({ error: 'Sinal não encontrado' })
+    const data = handSignalSchema.partial().parse(req.body)
+    const updated = await prisma.handSignal.update({ where: { id: req.params.id }, data })
+    return res.json(updated)
+  } catch (err) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors })
+    throw err
+  }
+})
+
+// DELETE /api/clubs/me/hand-signals/:id
+router.delete('/me/hand-signals/:id', requireRole('ADMIN', 'CAPTAIN'), async (req: AuthRequest, res: Response) => {
+  const signal = await prisma.handSignal.findFirst({ where: { id: req.params.id, clubId: req.user!.clubId } })
+  if (!signal) return res.status(404).json({ error: 'Sinal não encontrado' })
+  await prisma.handSignal.delete({ where: { id: req.params.id } })
+  return res.json({ message: 'Sinal eliminado' })
+})
+
+// POST /api/clubs/me/hand-signals/:id/image
+router.post('/me/hand-signals/:id/image', requireRole('ADMIN', 'CAPTAIN'), upload.single('image'), async (req: AuthRequest, res: Response) => {
+  if (!req.file) return res.status(400).json({ error: 'Ficheiro em falta' })
+  const signal = await prisma.handSignal.findFirst({ where: { id: req.params.id, clubId: req.user!.clubId } })
+  if (!signal) return res.status(404).json({ error: 'Sinal não encontrado' })
+  const url = await uploadToCloudinary(req.file.buffer, `clubs/${req.user!.clubId}/hand-signals/${req.params.id}`)
+  const updated = await prisma.handSignal.update({ where: { id: req.params.id }, data: { imageUrl: url } })
+  return res.json({ imageUrl: updated.imageUrl })
+})
+
+// PUT /api/clubs/me/hand-signals/reorder — actualizar ordem de vários sinais
+router.put('/me/hand-signals/reorder', requireRole('ADMIN', 'CAPTAIN'), async (req: AuthRequest, res: Response) => {
+  const schema = z.object({ ids: z.array(z.string()) })
+  try {
+    const { ids } = schema.parse(req.body)
+    await Promise.all(ids.map((id, index) =>
+      prisma.handSignal.updateMany({ where: { id, clubId: req.user!.clubId }, data: { order: index } })
+    ))
+    return res.json({ message: 'Ordem actualizada' })
+  } catch (err) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors })
+    throw err
+  }
+})
+
 export default router

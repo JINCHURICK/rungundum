@@ -1,12 +1,32 @@
-import { useQuery } from '@tanstack/react-query'
-import { Users, Route, Trophy, TrendingUp, Calendar } from 'lucide-react'
+import { useState } from 'react'
+import { useQuery, useMutation } from '@tanstack/react-query'
+import { Users, Route, Trophy, TrendingUp, Calendar, FileText } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { api } from '@/lib/api'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
+import { Button } from '@/components/ui/Button'
 
 export default function Stats() {
+  const currentYear = new Date().getFullYear()
+  const [reportYear, setReportYear] = useState(currentYear)
+
   const { data: stats, isLoading } = useQuery({
     queryKey: ['stats'],
     queryFn: () => api.get('/stats').then((r) => r.data),
+  })
+
+  const reportMutation = useMutation({
+    mutationFn: (year: number) => api.post('/pdf/annual-report', { year }, { responseType: 'blob' }),
+    onSuccess: (r, year) => {
+      const disposition = r.headers['content-disposition'] as string | undefined
+      const utf8 = disposition?.match(/filename\*=UTF-8''([^;]+)/i)
+      const filename = utf8 ? decodeURIComponent(utf8[1].trim()) : `Relatorio Anual ${year}.pdf`
+      const url = URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }))
+      const a = document.createElement('a'); a.href = url; a.download = filename; a.click()
+      URL.revokeObjectURL(url)
+      toast.success('Relatório gerado!')
+    },
+    onError: () => toast.error('Erro ao gerar relatório'),
   })
 
   if (isLoading) return (
@@ -19,7 +39,29 @@ export default function Stats() {
 
   return (
     <div className="fade-in space-y-6">
-      <h1 className="text-lg font-bold text-gray-900">Estatísticas</h1>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h1 className="text-lg font-bold text-gray-900">Estatísticas</h1>
+        <div className="flex items-center gap-2">
+          <select
+            value={reportYear}
+            onChange={(e) => setReportYear(Number(e.target.value))}
+            className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none"
+          >
+            {Array.from({ length: 5 }, (_, i) => currentYear - i).map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+          <Button
+            size="sm"
+            variant="secondary"
+            loading={reportMutation.isPending}
+            onClick={() => reportMutation.mutate(reportYear)}
+          >
+            <FileText size={14} />
+            Relatório Anual PDF
+          </Button>
+        </div>
+      </div>
 
       {/* Key metrics */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

@@ -124,6 +124,15 @@ export async function generateRaidPDF(raid: any, club: any, options: PDFOptions 
   .checklist-box { width: 11px; height: 11px; border: 1.5px solid #bbb; border-radius: 2px; flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center; }
   .checklist-box.checked { background: #16a34a; border-color: #16a34a; color: white; font-size: 7pt; font-weight: 900; line-height: 1; }
 
+  /* ── Hand Signals ── */
+  .signals-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .signal-card { border: 1px solid #e8e8e8; border-radius: 6px; overflow: hidden; break-inside: avoid; }
+  .signal-img { width: 100%; height: 80px; object-fit: cover; }
+  .signal-placeholder { width: 100%; height: 80px; background: #f5f5f5; display: flex; align-items: center; justify-content: center; font-size: 22pt; color: #ddd; }
+  .signal-body { padding: 6px 8px; }
+  .signal-name { font-size: 8.5pt; font-weight: 700; color: #1a1a1a; }
+  .signal-desc { font-size: 7.5pt; color: #666; line-height: 1.4; margin-top: 2px; }
+
   /* ── Signatures ── */
   .signatures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 12px; }
   .signature-box { border-bottom: 1px solid #ccc; padding-bottom: 4px; margin-top: 30px; }
@@ -325,6 +334,25 @@ ${opts.includeChecklist ? `
       </div>
     </div>`
   }).join('')}
+</div>
+` : ''}
+
+${club.handSignals?.length ? `
+<!-- SINAIS DE MÃO -->
+<div class="section">
+  <div class="section-title">Sinais de Mão do Clube</div>
+  <div class="signals-grid">
+    ${club.handSignals.map((s: any) => `
+    <div class="signal-card">
+      ${s.imageUrl
+        ? `<img src="${s.imageUrl}" class="signal-img" alt="${s.name}">`
+        : `<div class="signal-placeholder">🤚</div>`}
+      <div class="signal-body">
+        <div class="signal-name">${s.name}</div>
+        ${s.description ? `<div class="signal-desc">${s.description}</div>` : ''}
+      </div>
+    </div>`).join('')}
+  </div>
 </div>
 ` : ''}
 
@@ -703,4 +731,230 @@ export async function generateMemberCertificate(member: any, club: any, year: nu
   })
   await browser.close()
   return Buffer.from(pdf)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Relatório Anual do Clube
+// ─────────────────────────────────────────────────────────────────────────────
+export async function generateAnnualReport(params: {
+  club: any
+  year: number
+  raids: any[]
+  members: any[]
+  transactions: any[]
+}): Promise<Buffer> {
+  const { club, year, raids, members, transactions } = params
+  const accentColor = club.accentColor ?? '#dc2626'
+  const resolvedLogoUrl = resolveImageForPuppeteer(club.logoUrl)
+
+  const completedRaids = raids.filter((r) => r.status === 'COMPLETED')
+  const totalKm = Math.round(completedRaids.reduce((s, r) => s + (r.estimatedKm ?? 0), 0))
+  const activeMembers = members.filter((m) => m.status === 'ACTIVE').length
+  const newThisYear = members.filter((m) => {
+    const d = m.joinedAt ? new Date(m.joinedAt) : null
+    return d && d.getFullYear() === year
+  }).length
+
+  const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+  const byMonth = monthNames.map((name, i) => ({
+    name,
+    total: raids.filter((r) => new Date(r.date).getMonth() === i).length,
+  }))
+  const maxMonthCount = Math.max(...byMonth.map((m) => m.total), 1)
+
+  const countMap: Record<string, { name: string; count: number }> = {}
+  for (const r of raids) {
+    for (const p of r.participants ?? []) {
+      const name = p.member?.nickname ?? p.member?.fullName ?? '?'
+      if (!countMap[p.memberId]) countMap[p.memberId] = { name, count: 0 }
+      countMap[p.memberId].count++
+    }
+  }
+  const topMembers = Object.values(countMap).sort((a, b) => b.count - a.count).slice(0, 10)
+
+  const totalIncome  = transactions.filter((t) => t.type === 'INCOME').reduce((s, t) => s + t.amount, 0)
+  const totalExpense = transactions.filter((t) => t.type === 'EXPENSE').reduce((s, t) => s + t.amount, 0)
+  const hasFinance   = transactions.length > 0
+  const fmtKz = (v: number) => v.toLocaleString('pt-AO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' Kz'
+
+  const issueDate = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
+
+  const reportHtml = `<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, 'Helvetica Neue', Helvetica, sans-serif; font-size: 10pt; color: #1a1a1a; background: white; }
+  .page { padding: 12mm 18mm 10mm 18mm; }
+  .section { margin-bottom: 22px; break-inside: avoid; page-break-inside: avoid; }
+  .pb { page-break-before: always; padding-top: 12mm; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
+  thead { display: table-header-group; }
+
+  .cover { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 14mm 0 12mm; border-bottom: 4px solid ${accentColor}; margin-bottom: 22px; }
+  .cover-logo { height: 68px; object-fit: contain; margin-bottom: 12px; }
+  .cover-club { font-size: 21pt; font-weight: 900; color: ${accentColor}; letter-spacing: 1px; text-transform: uppercase; }
+  .cover-motto { font-size: 9pt; color: #888; margin-top: 4px; font-style: italic; }
+  .cover-report { margin-top: 18px; }
+  .cover-report h1 { font-size: 15pt; font-weight: 700; letter-spacing: 4px; text-transform: uppercase; color: #222; }
+  .cover-year { display: inline-block; margin-top: 10px; background: ${accentColor}; color: white; font-size: 17pt; font-weight: 900; padding: 5px 34px; border-radius: 4px; letter-spacing: 4px; }
+
+  .section-title { font-size: 10.5pt; font-weight: 700; color: white; background: ${accentColor}; padding: 5px 12px; border-radius: 4px; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 22px; }
+  .metric { border: 1px solid #e8e8e8; border-top: 3px solid ${accentColor}; border-radius: 6px; padding: 12px 10px; text-align: center; }
+  .metric-value { font-size: 20pt; font-weight: 900; color: ${accentColor}; line-height: 1; }
+  .metric-label { font-size: 7.5pt; color: #999; margin-top: 5px; text-transform: uppercase; letter-spacing: 0.4px; }
+
+  .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+  .bar-month { font-size: 7.5pt; color: #999; width: 24px; text-align: right; flex-shrink: 0; }
+  .bar-bg { flex: 1; height: 14px; background: #f0f0f0; border-radius: 3px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; background: ${accentColor}; min-width: 2px; }
+  .bar-num { font-size: 7.5pt; font-weight: 700; color: ${accentColor}; width: 16px; text-align: right; flex-shrink: 0; }
+
+  .members-list { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .member-row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; background: #fafafa; border-radius: 5px; border: 1px solid #f0f0f0; }
+  .member-rank { font-size: 10pt; width: 22px; flex-shrink: 0; text-align: center; }
+  .member-bar-wrap { flex: 1; }
+  .member-name { font-size: 8.5pt; font-weight: 600; color: #222; margin-bottom: 3px; }
+  .member-bar-bg { height: 4px; background: #eee; border-radius: 2px; overflow: hidden; }
+  .member-bar-fill { height: 100%; border-radius: 2px; background: ${accentColor}; }
+  .member-count { font-size: 8pt; font-weight: 700; color: ${accentColor}; flex-shrink: 0; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+  th { background: ${accentColor}; color: white; font-weight: 700; padding: 5px 10px; text-align: left; }
+  td { padding: 5px 10px; border-bottom: 1px solid #f0f0f0; }
+  tr:last-child td { border-bottom: none; }
+  tr:nth-child(even) td { background: #fafafa; }
+
+  .finance-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .fin-card { border-radius: 6px; padding: 14px 12px; text-align: center; }
+  .fin-income  { background: #f0fdf4; border: 1px solid #bbf7d0; }
+  .fin-expense { background: #fef2f2; border: 1px solid #fecaca; }
+  .fin-balance { background: ${accentColor}08; border: 1px solid ${accentColor}33; }
+  .fin-value { font-size: 14pt; font-weight: 900; margin-bottom: 3px; }
+  .fin-income  .fin-value { color: #16a34a; }
+  .fin-expense .fin-value { color: #dc2626; }
+  .fin-balance .fin-value { color: ${accentColor}; }
+  .fin-label { font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.4px; color: #999; }
+
+  .footer { margin-top: 22px; padding-top: 10px; border-top: 1px solid #e8e8e8; display: flex; justify-content: space-between; font-size: 7.5pt; color: #aaa; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<div class="cover">
+  ${resolvedLogoUrl ? `<img src="${resolvedLogoUrl}" class="cover-logo" alt="Logo">` : ''}
+  <div class="cover-club">${club.name}</div>
+  ${club.motto ? `<div class="cover-motto">${club.motto}</div>` : ''}
+  <div class="cover-report">
+    <h1>Relatório Anual</h1>
+    <div class="cover-year">${year}</div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Resumo do Ano</div>
+  <div class="metrics">
+    <div class="metric"><div class="metric-value">${completedRaids.length}</div><div class="metric-label">Raids Realizados</div></div>
+    <div class="metric"><div class="metric-value">${totalKm > 0 ? totalKm.toLocaleString('pt-AO') : '—'}</div><div class="metric-label">KM Percorridos</div></div>
+    <div class="metric"><div class="metric-value">${activeMembers}</div><div class="metric-label">Membros Activos</div></div>
+    <div class="metric"><div class="metric-value">${newThisYear > 0 ? `+${newThisYear}` : newThisYear}</div><div class="metric-label">Novos Membros</div></div>
+  </div>
+</div>
+
+${raids.length > 0 ? `
+<div class="section">
+  <div class="section-title">Actividade Mensal — ${year}</div>
+  ${byMonth.map((m) => `
+  <div class="bar-row">
+    <div class="bar-month">${m.name}</div>
+    <div class="bar-bg"><div class="bar-fill" style="width:${m.total > 0 ? Math.round((m.total / maxMonthCount) * 100) : 0}%"></div></div>
+    <div class="bar-num">${m.total > 0 ? m.total : ''}</div>
+  </div>`).join('')}
+</div>
+` : ''}
+
+${topMembers.length > 0 ? `
+<div class="section">
+  <div class="section-title">Pilotos mais Activos</div>
+  <div class="members-list">
+    ${topMembers.map((m, i) => {
+      const medals = ['🥇', '🥈', '🥉']
+      const maxC = topMembers[0]?.count ?? 1
+      return `
+    <div class="member-row">
+      <div class="member-rank">${medals[i] ?? `<span style="font-size:8pt;color:#999;font-weight:700">${i + 1}</span>`}</div>
+      <div class="member-bar-wrap">
+        <div class="member-name">${m.name}</div>
+        <div class="member-bar-bg"><div class="member-bar-fill" style="width:${Math.round((m.count / maxC) * 100)}%"></div></div>
+      </div>
+      <div class="member-count">${m.count}</div>
+    </div>`
+    }).join('')}
+  </div>
+</div>
+` : ''}
+
+${raids.length > 0 ? `
+<div class="section pb">
+  <div class="section-title">Raids ${year} — ${raids.length} no total</div>
+  <table>
+    <thead><tr><th>Raid</th><th>Data</th><th>Rota</th><th>Estado</th><th>KM</th><th>Part.</th></tr></thead>
+    <tbody>
+      ${raids.map((r) => `
+      <tr>
+        <td><strong>${r.title}</strong></td>
+        <td style="white-space:nowrap">${format(new Date(r.date), 'dd/MM/yyyy')}</td>
+        <td style="color:#555;font-size:8pt">${r.origin} → ${r.destination}</td>
+        <td style="font-size:8pt">${getRaidStatusLabel(r.status)}</td>
+        <td>${r.estimatedKm ? `${r.estimatedKm} km` : '—'}</td>
+        <td>${(r.participants ?? []).length}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>
+</div>
+` : `<p style="color:#999;font-size:9pt;text-align:center;padding:20px">Nenhum raid registado em ${year}.</p>`}
+
+${hasFinance ? `
+<div class="section">
+  <div class="section-title">Resumo Financeiro — ${year}</div>
+  <div class="finance-grid">
+    <div class="fin-card fin-income"><div class="fin-value">${fmtKz(totalIncome)}</div><div class="fin-label">Total de Receitas</div></div>
+    <div class="fin-card fin-expense"><div class="fin-value">${fmtKz(totalExpense)}</div><div class="fin-label">Total de Despesas</div></div>
+    <div class="fin-card fin-balance"><div class="fin-value">${fmtKz(totalIncome - totalExpense)}</div><div class="fin-label">Saldo Líquido</div></div>
+  </div>
+</div>
+` : ''}
+
+<div class="footer">
+  <span>${club.name} · Relatório Anual ${year}</span>
+  <span>Emitido em ${issueDate}</span>
+  <span>Rungundum</span>
+</div>
+
+</div>
+</body>
+</html>`
+
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  })
+  const page = await browser.newPage()
+  await page.setContent(reportHtml, { waitUntil: 'domcontentloaded' })
+  const pdf = await page.pdf({
+    format: 'A4',
+    printBackground: true,
+    displayHeaderFooter: false,
+    margin: { top: '8mm', right: '0', bottom: '8mm', left: '0' },
+  })
+  await browser.close()
+  return Buffer.from(pdf)
+}
+
+function getRaidStatusLabel(s: string) {
+  return ({ DRAFT: 'Rascunho', CONFIRMED: 'Confirmado', IN_PROGRESS: 'Em Curso', COMPLETED: 'Concluído', CANCELLED: 'Cancelado' } as Record<string, string>)[s] ?? s
 }
