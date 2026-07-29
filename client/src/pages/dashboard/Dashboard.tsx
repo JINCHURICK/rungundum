@@ -8,19 +8,22 @@ import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
 import { RaidStatusBadge } from '@/components/ui/Badge'
 import { formatShortDate } from '@/lib/utils'
+import { Skeleton } from '@/components/ui/Skeleton'
 
 export default function Dashboard() {
   const { club, user } = useAuthStore()
 
-  const { data: raids = [] } = useQuery({
+  const { data: raids = [], isLoading: raidsLoading } = useQuery({
     queryKey: ['raids'],
     queryFn: () => api.get('/raids').then((r) => r.data),
   })
 
-  const { data: members = [] } = useQuery({
+  const { data: members = [], isLoading: membersLoading } = useQuery({
     queryKey: ['members'],
     queryFn: () => api.get('/members').then((r) => r.data),
   })
+
+  const isLoading = raidsLoading || membersLoading
 
   const isAdmin = can(user?.role, 'RAIDS_WRITE')
 
@@ -94,24 +97,40 @@ export default function Dashboard() {
       )}
 
       {/* Stats — 2 colunas no mobile, 4 no desktop */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {stats.map(({ label, value, icon: Icon, color, bg }) => (
-          <Card key={label}>
-            <CardContent className="flex items-center gap-3 py-4 px-4">
-              <div className={`p-2.5 rounded-xl flex-shrink-0 ${bg}`}>
-                <Icon className={`w-4 h-4 ${color}`} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xl font-bold text-gray-900 leading-none">{value}</p>
-                <p className="text-xs text-gray-500 mt-0.5 leading-tight">{label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {isLoading ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="flex items-center gap-3 py-4 px-4">
+                <Skeleton className="w-9 h-9 rounded-xl flex-shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-5 w-8 rounded" />
+                  <Skeleton className="h-3 w-20 rounded" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {stats.map(({ label, value, icon: Icon, color, bg }) => (
+            <Card key={label}>
+              <CardContent className="flex items-center gap-3 py-4 px-4">
+                <div className={`p-2.5 rounded-xl flex-shrink-0 ${bg}`}>
+                  <Icon className={`w-4 h-4 ${color}`} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xl font-bold text-gray-900 leading-none">{value}</p>
+                  <p className="text-xs text-gray-500 mt-0.5 leading-tight">{label}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Upcoming raids */}
-      {upcomingRaids.length > 0 && (
+      {!isLoading && upcomingRaids.length > 0 && (
         <div>
           <h2 className="font-semibold text-gray-900 mb-3">Próximos Raids</h2>
           <div className="space-y-2">

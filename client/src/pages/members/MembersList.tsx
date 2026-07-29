@@ -14,6 +14,7 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
 import { getMemberStatusLabel } from '@/lib/utils'
+import { Skeleton } from '@/components/ui/Skeleton'
 
 const memberSchema = z.object({
   fullName: z.string().min(2, 'Nome obrigatório'),
@@ -124,8 +125,17 @@ export default function MembersList() {
 
       {/* Members list */}
       {isLoading ? (
-        <div className="flex justify-center py-16">
-          <div className="animate-spin w-6 h-6 border-2 border-gray-200 rounded-full" style={{ borderTopColor: 'var(--accent)' }} />
+        <div className="space-y-2">
+          {Array.from({ length: 7 }).map((_, i) => (
+            <div key={i} className="bg-white rounded-2xl border border-gray-100 px-4 py-3.5 flex items-center gap-3">
+              <Skeleton className="w-10 h-10 rounded-full flex-shrink-0" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-3.5 w-36 rounded" />
+                <Skeleton className="h-3 w-20 rounded" />
+              </div>
+              <Skeleton className="h-5 w-16 rounded-full flex-shrink-0" />
+            </div>
+          ))}
         </div>
       ) : members.length === 0 ? (
         <Card>

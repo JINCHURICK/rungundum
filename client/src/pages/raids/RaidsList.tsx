@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
 import { RaidStatusBadge } from '@/components/ui/Badge'
 import { getDifficultyLabel } from '@/lib/utils'
+import { Skeleton } from '@/components/ui/Skeleton'
 
 const STATUSES = [
   { value: '', label: 'Todos' },
@@ -100,8 +101,20 @@ export default function RaidsList() {
 
       {/* Raids list */}
       {isLoading ? (
-        <div className="flex justify-center py-16">
-          <div className="animate-spin w-6 h-6 border-2 border-gray-200 rounded-full" style={{ borderTopColor: 'var(--accent)' }} />
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="bg-white rounded-2xl border border-gray-100 px-4 py-3.5 flex items-center gap-3">
+              <Skeleton className="w-11 h-11 rounded-xl flex-shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-3.5 w-40 rounded" />
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                </div>
+                <Skeleton className="h-3 w-28 rounded" />
+              </div>
+              <Skeleton className="w-4 h-4 rounded flex-shrink-0" />
+            </div>
+          ))}
         </div>
       ) : raids.length === 0 ? (
         <Card>
