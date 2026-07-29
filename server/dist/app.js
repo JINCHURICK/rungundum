@@ -41,9 +41,24 @@ app.set('trust proxy', 1);
 app.use((0, compression_1.default)());
 // Security headers
 app.use((0, helmet_1.default)({
-    contentSecurityPolicy: false, // CSP gerido pelo frontend (Vite)
     crossOriginEmbedderPolicy: false,
     hsts: { maxAge: 31536000, includeSubDomains: true },
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            fontSrc: ["'self'", "https://fonts.gstatic.com"],
+            imgSrc: ["'self'", "data:", "https://res.cloudinary.com"],
+            connectSrc: ["'self'"],
+            frameSrc: ["'none'"],
+            frameAncestors: ["'none'"],
+            objectSrc: ["'none'"],
+            baseUri: ["'self'"],
+            formAction: ["'self'"],
+            upgradeInsecureRequests: [],
+        },
+    },
 }));
 // CORS — apenas origem conhecida
 const allowedOrigin = process.env.CLIENT_URL ?? 'http://localhost:5173';
