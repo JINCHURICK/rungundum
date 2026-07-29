@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Bell } from 'lucide-react'
+import { Bell, BellOff } from 'lucide-react'
 import { api } from '@/lib/api'
 import { formatShortDate } from '@/lib/utils'
 import { Link } from 'react-router-dom'
+import { usePushNotifications } from '@/hooks/usePushNotifications'
 
 function typeIcon(type: string) {
   return { RAID_CONFIRMED: '🏍️', ANNOUNCEMENT: '📢', DISCIPLINARY: '⚠️' }[type] ?? '🔔'
@@ -13,6 +14,7 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const qc = useQueryClient()
+  const push = usePushNotifications()
 
   const { data } = useQuery({
     queryKey: ['notifications'],
@@ -96,6 +98,23 @@ export default function NotificationBell() {
               ))
             )}
           </div>
+
+          {/* Botão de notificações push */}
+          {push.isSupported && push.permission !== 'denied' && (
+            <div className="px-4 py-3 border-t border-gray-100">
+              <button
+                onClick={push.isSubscribed ? push.unsubscribe : push.subscribe}
+                disabled={push.isLoading}
+                className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-medium transition-colors border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
+              >
+                {push.isSubscribed ? (
+                  <><BellOff size={13} className="text-gray-400" /> Desativar notificações push</>
+                ) : (
+                  <><Bell size={13} style={{ color: 'var(--accent)' }} /> Ativar notificações push</>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

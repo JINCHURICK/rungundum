@@ -62,14 +62,29 @@ model User {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
-  club          Club          @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  member        Member?
-  refreshTokens RefreshToken[]
-  pendingAuth   PendingAuth?
-  uploadedPhotos RaidPhoto[]
-  notifications  Notification[]
+  club              Club               @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  member            Member?
+  refreshTokens     RefreshToken[]
+  pendingAuth       PendingAuth?
+  uploadedPhotos    RaidPhoto[]
+  notifications     Notification[]
+  pushSubscriptions PushSubscription[]
 
   @@map("users")
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @db.Text
+  p256dh    String   @db.Text
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }
 
 model PendingAuth {
