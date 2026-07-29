@@ -1,16 +1,40 @@
-﻿import { useState } from 'react'
+﻿import { useState, useCallback } from 'react'
 import { Outlet, Link } from 'react-router-dom'
 import { Menu, X } from 'lucide-react'
 import Sidebar from './Sidebar'
 import { useAuthStore } from '@/store/auth'
 import NotificationBell from '@/components/ui/NotificationBell'
 import OfflineBanner from '@/components/ui/OfflineBanner'
+import { useIdleTimer } from '@/hooks/useIdleTimer'
+import { IdleWarningModal } from '@/components/IdleWarningModal'
+import { api } from '@/lib/api'
 
 export default function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const { club, user } = useAuthStore()
+  const [idleWarning, setIdleWarning] = useState(false)
+  const { club, user, logout } = useAuthStore()
+
+  const handleIdle = useCallback(async () => {
+    setIdleWarning(false)
+    sessionStorage.setItem('logout-reason', 'A sessão expirou por inatividade (10 minutos).')
+    try { await api.post('/auth/logout') } catch { /* já sem sessão */ }
+    logout()
+    window.location.href = '/login'
+  }, [logout])
+
+  useIdleTimer({
+    onWarn: useCallback(() => setIdleWarning(true), []),
+    onIdle: handleIdle,
+    enabled: !!user,
+  })
 
   return (
+    <>
+    <IdleWarningModal
+      open={idleWarning}
+      onContinue={() => setIdleWarning(false)}
+      onLogout={handleIdle}
+    />
     <div className="flex bg-gray-50 min-h-screen">
       {/* Sidebar — desktop, sticky */}
       <div className="hidden lg:block flex-shrink-0">
@@ -80,5 +104,6 @@ export default function Layout() {
         </div>
       </div>
     </div>
+    </>
   )
 }

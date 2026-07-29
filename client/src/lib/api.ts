@@ -36,7 +36,13 @@ api.interceptors.response.use(
         const newAccessToken = await refreshPromise
         original.headers.Authorization = `Bearer ${newAccessToken}`
         return api(original)
-      } catch {
+      } catch (refreshErr: any) {
+        const code = refreshErr?.response?.data?.code
+        if (code === 'SESSION_TERMINATED') {
+          sessionStorage.setItem('logout-reason', 'A sua sessão foi terminada por um novo início de sessão noutro dispositivo.')
+        } else if (code === 'IDLE_TIMEOUT') {
+          sessionStorage.setItem('logout-reason', 'A sessão expirou por inatividade.')
+        }
         useAuthStore.getState().logout()
         window.location.href = '/login'
       }

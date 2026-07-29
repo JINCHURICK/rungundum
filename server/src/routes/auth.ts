@@ -86,14 +86,23 @@ function buildAuthResponse(user: any, club: any, memberId?: string, memberPhotoU
   }
 }
 
-async function createSession(userId: string, clubId: string, role: string, platformAdmin = false, tokenVersion = 0) {
+async function createSession(
+  userId: string, clubId: string, role: string, platformAdmin = false, tokenVersion = 0,
+  opts?: { ip?: string; userAgent?: string },
+) {
   const payload: TokenPayload = { userId, clubId, role, platformAdmin, tv: tokenVersion }
   const accessToken = signAccessToken(payload)
   const refreshToken = signRefreshToken(payload)
   // Sessão única: invalida todas as sessões anteriores do utilizador
   await prisma.refreshToken.deleteMany({ where: { userId } })
   await prisma.refreshToken.create({
-    data: { userId, token: refreshToken, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) },
+    data: {
+      userId,
+      token: refreshToken,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      ipAddress: opts?.ip ?? null,
+      userAgent: opts?.userAgent ?? null,
+    },
   })
   return { accessToken, refreshToken }
 }
@@ -193,7 +202,9 @@ router.post('/verify-email', async (req: Request, res: Response) => {
       data: { emailVerified: true, verificationToken: null, verificationExpires: null },
     })
 
-    const { accessToken, refreshToken } = await createSession(user.id, user.clubId, user.role, user.platformAdmin, user.tokenVersion)
+    const { accessToken, refreshToken } = await createSession(user.id, user.clubId, user.role, user.platformAdmin, user.tokenVersion, {
+      ip: req.ip, userAgent: req.headers['user-agent'],
+    })
     return res.json({ accessToken, refreshToken, ...buildAuthResponse(user, user.club, user.member?.id, user.member?.photoUrl) })
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors })
@@ -306,7 +317,9 @@ router.post('/verify-2fa', twoFALimiter, async (req: Request, res: Response) => 
     await prisma.pendingAuth.delete({ where: { id: pending.id } })
 
     const { user } = pending
-    const { accessToken, refreshToken } = await createSession(user.id, user.clubId, user.role, user.platformAdmin, user.tokenVersion)
+    const { accessToken, refreshToken } = await createSession(user.id, user.clubId, user.role, user.platformAdmin, user.tokenVersion, {
+      ip: req.ip, userAgent: req.headers['user-agent'],
+    })
     return res.json({ accessToken, refreshToken, ...buildAuthResponse(user, user.club, user.member?.id, user.member?.photoUrl) })
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors })
@@ -383,7 +396,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
   const { refreshToken } = req.body
   if (!refreshToken) return res.status(400).json({ error: 'Refresh token em falta' })
 
-  // 1. JWT é a garantia principal — se a assinatura for inválida, rejeitar
+  // 1. Assinatura JWT — barreira principal; rejeitar imediatamente se inválida
   let payload: TokenPayload
   try {
     payload = verifyRefreshToken(refreshToken)
@@ -391,7 +404,26 @@ router.post('/refresh', async (req: Request, res: Response) => {
     return res.status(401).json({ error: 'Refresh token inválido' })
   }
 
-  // 2. Obter tokenVersion actual para incluir nos novos tokens (best-effort)
+  // 2. Verificar token na BD — garante sessão única (single-session)
+  // Com rotação create-first "não encontrado" = sessão terminada intencionalmente (novo login/logout)
+  // Se a BD falhar (Prisma panic no Hostinger) → catch → continuar com JWT apenas
+  try {
+    const found = await prisma.refreshToken.findUnique({
+      where: { token: refreshToken },
+      select: { id: true },
+    })
+    if (!found) {
+      return res.status(401).json({
+        error: 'A sua sessão foi terminada por um novo início de sessão noutro dispositivo.',
+        code: 'SESSION_TERMINATED',
+      })
+    }
+  } catch (err: any) {
+    if (err?.name === 'PrismaClientRustPanicError') recreatePrismaClient()
+    // BD indisponível — continuar com base na assinatura JWT
+  }
+
+  // 3. Obter tokenVersion actual para incluir nos novos tokens (best-effort)
   const user = await prisma.user.findUnique({
     where: { id: payload.userId },
     select: { tokenVersion: true },
@@ -407,12 +439,12 @@ router.post('/refresh', async (req: Request, res: Response) => {
   const newRefreshToken = signRefreshToken(tokenPayload)
   const accessToken = signAccessToken(tokenPayload)
 
-  // 3. Rotação assíncrona — CREATE primeiro, depois DELETE
-  // Ordem invertida garante que existe sempre pelo menos um token válido na BD,
-  // mesmo que o Prisma faça panic entre as duas operações no Hostinger.
+  // 4. Rotação CREATE-first depois DELETE
+  // Garante que existe sempre pelo menos um token válido na BD mesmo que o Prisma
+  // faça panic entre as duas operações — elimina falsos SESSION_TERMINATED
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
   prisma.refreshToken
-    .create({ data: { userId: payload.userId, token: newRefreshToken, expiresAt } })
+    .create({ data: { userId: payload.userId, token: newRefreshToken, expiresAt, lastUsedAt: new Date() } })
     .then(() => prisma.refreshToken.deleteMany({ where: { token: refreshToken } }))
     .catch((err: any) => {
       if (err?.name === 'PrismaClientRustPanicError') recreatePrismaClient()

@@ -22,6 +22,12 @@ export default function Login() {
   const { setAuth } = useAuthStore()
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({ resolver: zodResolver(schema) })
 
+  const logoutReason = (() => {
+    const r = sessionStorage.getItem('logout-reason')
+    if (r) sessionStorage.removeItem('logout-reason')
+    return r
+  })()
+
   // 2FA state
   const [pendingToken, setPendingToken] = useState<string | null>(null)
   const [code, setCode] = useState(['', '', '', '', '', ''])
@@ -130,6 +136,11 @@ export default function Login() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-8">
+          {logoutReason && (
+            <div className="mb-4 px-4 py-3 rounded-xl bg-amber-50 border border-amber-100 text-amber-700 text-sm">
+              {logoutReason}
+            </div>
+          )}
           {!pendingToken ? (
             <>
               <h2 className="text-xl font-bold text-gray-900 mb-6">Entrar na conta</h2>
