@@ -13,7 +13,7 @@ function typeIcon(type: string) {
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false)
-  const [pos, setPos] = useState({ top: 0, right: 0 })
+  const [pos, setPos] = useState<{ top: number; left?: number; right?: number }>({ top: 0, right: 0 })
   const buttonRef = useRef<HTMLButtonElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const qc = useQueryClient()
@@ -55,10 +55,13 @@ export default function NotificationBell() {
   function handleToggle() {
     if (!open && buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect()
-      setPos({
-        top: rect.bottom + 8,
-        right: window.innerWidth - rect.right,
-      })
+      const dropdownW = 320
+      // Se há espaço à direita do botão → ancora à esquerda; caso contrário à direita
+      if (rect.left + dropdownW <= window.innerWidth) {
+        setPos({ top: rect.bottom + 8, left: rect.left })
+      } else {
+        setPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right })
+      }
     }
     setOpen((v) => !v)
   }
@@ -67,7 +70,7 @@ export default function NotificationBell() {
     <div
       ref={dropdownRef}
       className="fixed w-80 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden"
-      style={{ top: pos.top, right: pos.right, zIndex: 9999 }}
+      style={{ top: pos.top, right: pos.right, left: pos.left, zIndex: 9999 }}
     >
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
         <p className="text-sm font-semibold text-gray-900">Notificações</p>

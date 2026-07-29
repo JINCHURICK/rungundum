@@ -109,7 +109,7 @@ export default function Sidebar({ onNavigate }: Props) {
             <p className="text-xs font-medium text-gray-900 truncate">{user?.email}</p>
             <p className="text-xs text-gray-400">{getUserRoleLabel(role)}</p>
           </div>
-          <NotificationBell />
+          <span className="hidden lg:block"><NotificationBell /></span>
         </div>
         <button
           onClick={() => { handleLogout(); onNavigate?.() }}
