@@ -13,11 +13,13 @@ export function readPlanCache(): any[] | null {
   }
 }
 
-export function writePlanCache(configs: any[]): void {
+export function writePlanCache(configs: any[]): boolean {
   try {
     fs.mkdirSync(CACHE_DIR, { recursive: true })
     fs.writeFileSync(CACHE_FILE, JSON.stringify(configs, null, 2), 'utf-8')
+    return true
   } catch (err) {
-    console.error('plan-cache write failed:', err)
+    console.error('[plan-cache] write failed:', (err as Error).message, '| path:', CACHE_FILE)
+    return false
   }
 }

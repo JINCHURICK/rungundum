@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { authenticate, requirePlatformAdmin, AuthRequest } from '../middleware/auth'
 import { PLAN_LABELS, PLAN_LIMITS, PLAN_PRICES, type PlanKey } from '../lib/plans'
-import { writePlanCache } from '../lib/plan-cache'
+import { readPlanCache, writePlanCache } from '../lib/plan-cache'
 import { recreatePrismaClient } from '../lib/prisma'
 
 const router = Router()
@@ -63,14 +63,27 @@ function migrateLegacyConfig(c: any): any {
 }
 
 async function getPlanConfigs() {
-  const settings = await prisma.platformSettings.upsert({
-    where: { id: 'singleton' },
-    create: { id: 'singleton', planConfigs: DEFAULT_PLAN_CONFIGS },
-    update: {},
-  })
-  const raw = settings.planConfigs as any[]
-  const configs = raw.length ? raw.map(migrateLegacyConfig) : DEFAULT_PLAN_CONFIGS
-  return configs
+  // Try file cache first — always available, no Prisma needed
+  const cached = readPlanCache()
+  if (cached && cached.length > 0) return cached.map(migrateLegacyConfig)
+
+  // File cache empty or missing — try DB
+  try {
+    const settings = await prisma.platformSettings.upsert({
+      where: { id: 'singleton' },
+      create: { id: 'singleton', planConfigs: DEFAULT_PLAN_CONFIGS },
+      update: {},
+    })
+    const raw = settings.planConfigs as any[]
+    const configs = raw.length ? raw.map(migrateLegacyConfig) : DEFAULT_PLAN_CONFIGS
+    // Write to file cache so next call doesn't need Prisma
+    writePlanCache(configs)
+    return configs
+  } catch (err: any) {
+    if (err?.name === 'PrismaClientRustPanicError') recreatePrismaClient()
+    console.error('[plan-configs] DB read failed:', err?.message ?? err)
+    return DEFAULT_PLAN_CONFIGS
+  }
 }
 
 // GET /api/platform-admin/stats
@@ -285,8 +298,8 @@ router.put('/plan-configs', async (req: AuthRequest, res: Response) => {
     })).parse(req.body)
 
     // Escrever ficheiro de cache PRIMEIRO — o endpoint público lê deste ficheiro
-    // e deve funcionar mesmo que o Prisma tenha problemas
-    writePlanCache(configs)
+    const written = writePlanCache(configs)
+    if (!written) console.error('[plan-configs] WARNING: file cache write failed — public plans will not update')
 
     // Persistir na BD de forma assíncrona — não bloqueia a resposta
     prisma.platformSettings.upsert({

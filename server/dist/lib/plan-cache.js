@@ -22,9 +22,11 @@ function writePlanCache(configs) {
     try {
         fs_1.default.mkdirSync(CACHE_DIR, { recursive: true });
         fs_1.default.writeFileSync(CACHE_FILE, JSON.stringify(configs, null, 2), 'utf-8');
+        return true;
     }
     catch (err) {
-        console.error('plan-cache write failed:', err);
+        console.error('[plan-cache] write failed:', err.message, '| path:', CACHE_FILE);
+        return false;
     }
 }
 //# sourceMappingURL=plan-cache.js.map
