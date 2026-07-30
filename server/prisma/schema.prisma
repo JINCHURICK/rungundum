@@ -105,7 +105,7 @@ model PendingAuth {
 model RefreshToken {
   id         String   @id @default(cuid())
   userId     String
-  token      String   @unique
+  token      String   @unique @db.VarChar(512)
   expiresAt  DateTime
   createdAt  DateTime @default(now())
   lastUsedAt DateTime @default(now())
