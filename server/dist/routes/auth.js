@@ -366,7 +366,7 @@ router.post('/refresh', async (req, res) => {
     const { refreshToken } = req.body;
     if (!refreshToken)
         return res.status(400).json({ error: 'Refresh token em falta' });
-    // 1. Assinatura JWT — barreira principal; rejeitar imediatamente se inválida
+    // 1. JWT — barreira principal; inválido = rejeitar imediatamente
     let payload;
     try {
         payload = (0, jwt_1.verifyRefreshToken)(refreshToken);
@@ -374,9 +374,10 @@ router.post('/refresh', async (req, res) => {
     catch {
         return res.status(401).json({ error: 'Refresh token inválido' });
     }
-    // 2. Verificar token na BD — garante sessão única (single-session)
-    // Com rotação create-first "não encontrado" = sessão terminada intencionalmente (novo login/logout)
-    // Se a BD falhar (Prisma panic no Hostinger) → catch → continuar com JWT apenas
+    // 2. Verificar token na BD (sessão única)
+    // "não encontrado" = sessão terminada por outro login/logout
+    // Erro de BD = Prisma panic no Hostinger → continuar com JWT apenas (sem rotação)
+    let tokenConfirmedInDb = false;
     try {
         const found = await prisma_1.prisma.refreshToken.findUnique({
             where: { token: refreshToken },
@@ -384,17 +385,18 @@ router.post('/refresh', async (req, res) => {
         });
         if (!found) {
             return res.status(401).json({
-                error: 'A sua sessão foi terminada por um novo início de sessão noutro dispositivo.',
+                error: 'A sua sessão foi terminada. Por favor autentique-se novamente.',
                 code: 'SESSION_TERMINATED',
             });
         }
+        tokenConfirmedInDb = true;
     }
     catch (err) {
         if (err?.name === 'PrismaClientRustPanicError')
             (0, prisma_2.recreatePrismaClient)();
-        // BD indisponível — continuar com base na assinatura JWT
+        // BD indisponível — modo fallback JWT, sem rotação
     }
-    // 3. Obter tokenVersion actual para incluir nos novos tokens (best-effort)
+    // 3. tokenVersion actual (best-effort)
     const user = await prisma_1.prisma.user.findUnique({
         where: { id: payload.userId },
         select: { tokenVersion: true },
@@ -408,18 +410,31 @@ router.post('/refresh', async (req, res) => {
     };
     const newRefreshToken = (0, jwt_1.signRefreshToken)(tokenPayload);
     const accessToken = (0, jwt_1.signAccessToken)(tokenPayload);
-    // 4. Rotação CREATE-first depois DELETE
-    // Garante que existe sempre pelo menos um token válido na BD mesmo que o Prisma
-    // faça panic entre as duas operações — elimina falsos SESSION_TERMINATED
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    prisma_1.prisma.refreshToken
-        .create({ data: { userId: payload.userId, token: newRefreshToken, expiresAt, lastUsedAt: new Date() } })
-        .then(() => prisma_1.prisma.refreshToken.deleteMany({ where: { token: refreshToken } }))
-        .catch((err) => {
-        if (err?.name === 'PrismaClientRustPanicError')
-            (0, prisma_2.recreatePrismaClient)();
-    });
-    return res.json({ accessToken, refreshToken: newRefreshToken });
+    // 4. Rotação SÍNCRONA: AGUARDAR o create antes de responder
+    // Se o create falhar → devolver o token ORIGINAL (ainda válido na BD)
+    // Elimina definitivamente o problema "cliente tem token que não existe na BD"
+    if (tokenConfirmedInDb) {
+        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+        try {
+            await prisma_1.prisma.refreshToken.create({
+                data: { userId: payload.userId, token: newRefreshToken, expiresAt, lastUsedAt: new Date() },
+            });
+            // Novo token confirmado na BD — apagar o antigo de forma assíncrona (seguro)
+            prisma_1.prisma.refreshToken.deleteMany({ where: { token: refreshToken } }).catch((err) => {
+                if (err?.name === 'PrismaClientRustPanicError')
+                    (0, prisma_2.recreatePrismaClient)();
+            });
+            return res.json({ accessToken, refreshToken: newRefreshToken });
+        }
+        catch (err) {
+            if (err?.name === 'PrismaClientRustPanicError')
+                (0, prisma_2.recreatePrismaClient)();
+            // Create falhou (panic, coluna em falta, etc.) → devolver token original
+            // O token original AINDA está na BD, logo o próximo refresh vai funcionar
+        }
+    }
+    // BD indisponível ou create falhou → access token renovado, refresh token inalterado
+    return res.json({ accessToken, refreshToken });
 });
 // POST /api/auth/logout
 router.post('/logout', auth_1.authenticate, async (req, res) => {
