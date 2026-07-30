@@ -18,6 +18,11 @@ process.on('unhandledRejection', (reason) => {
         (0, prisma_1.recreatePrismaClient)();
         return;
     }
+    // Prisma initialization errors happen after engine panics — log but don't crash
+    if (reason?.name === 'PrismaClientInitializationError') {
+        console.error('[prisma] Initialization error (unhandledRejection) — request failed but server continues:', reason?.message);
+        return;
+    }
     console.error('Unhandled rejection:', reason);
     process.exit(1);
 });
@@ -25,6 +30,10 @@ process.on('uncaughtException', (err) => {
     if (isPrismaPanic(err)) {
         console.error('[panic] Prisma engine panic (uncaughtException) — recreating client');
         (0, prisma_1.recreatePrismaClient)();
+        return;
+    }
+    if (err?.name === 'PrismaClientInitializationError') {
+        console.error('[prisma] Initialization error (uncaughtException) — request failed but server continues:', err?.message);
         return;
     }
     console.error('Uncaught exception:', err);

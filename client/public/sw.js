@@ -1,7 +1,7 @@
 // Service Worker — Rungundum PWA
 // Versão: 2.0 — Push Notifications + Offline Cache
 
-const CACHE_VERSION = 'rg-v4'
+const CACHE_VERSION = 'rg-v5'
 const SHELL_CACHE   = `${CACHE_VERSION}-shell`
 const ASSETS_CACHE  = `${CACHE_VERSION}-assets`
 const API_CACHE     = `${CACHE_VERSION}-api`
@@ -58,10 +58,18 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // 2. Navegação (SPA) — servir index.html da cache → React Router trata o resto
+  // 2. Navegação (SPA) — Network First para index.html (sempre fresh, fallback cache offline)
+  //    Cache-First causava servir index.html stale após rebuild do cliente (novos hashes de chunks)
   if (request.mode === 'navigate') {
     event.respondWith(
-      caches.match('/').then((cached) => cached || fetch(request))
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            caches.open(SHELL_CACHE).then((cache) => cache.put('/', response.clone()))
+          }
+          return response
+        })
+        .catch(() => caches.match('/'))
     )
     return
   }

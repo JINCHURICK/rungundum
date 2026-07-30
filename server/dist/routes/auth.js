@@ -84,7 +84,14 @@ function buildAuthResponse(user, club, memberId, memberPhotoUrl) {
         club: { id: club.id, name: club.name, acronym: club.acronym, accentColor: club.accentColor, logoUrl: club.logoUrl },
     };
 }
-async function createSession(userId, clubId, role, platformAdmin = false, tokenVersion = 0, opts) {
+async function createSession(userId, clubId, role, platformAdmin = false, opts) {
+    // Incrementar tokenVersion invalida imediatamente qualquer access token activo
+    // (mesmo que ainda não tenha expirado), forçando logout na próxima chamada de API
+    const { tokenVersion } = await prisma_1.prisma.user.update({
+        where: { id: userId },
+        data: { tokenVersion: { increment: 1 } },
+        select: { tokenVersion: true },
+    });
     const payload = { userId, clubId, role, platformAdmin, tv: tokenVersion };
     const accessToken = (0, jwt_1.signAccessToken)(payload);
     const refreshToken = (0, jwt_1.signRefreshToken)(payload);
@@ -190,7 +197,7 @@ router.post('/verify-email', async (req, res) => {
             where: { id: user.id },
             data: { emailVerified: true, verificationToken: null, verificationExpires: null },
         });
-        const { accessToken, refreshToken } = await createSession(user.id, user.clubId, user.role, user.platformAdmin, user.tokenVersion, {
+        const { accessToken, refreshToken } = await createSession(user.id, user.clubId, user.role, user.platformAdmin, {
             ip: req.ip, userAgent: req.headers['user-agent'],
         });
         return res.json({ accessToken, refreshToken, ...buildAuthResponse(user, user.club, user.member?.id, user.member?.photoUrl) });
@@ -292,7 +299,7 @@ router.post('/verify-2fa', twoFALimiter, async (req, res) => {
         }
         await prisma_1.prisma.pendingAuth.delete({ where: { id: pending.id } });
         const { user } = pending;
-        const { accessToken, refreshToken } = await createSession(user.id, user.clubId, user.role, user.platformAdmin, user.tokenVersion, {
+        const { accessToken, refreshToken } = await createSession(user.id, user.clubId, user.role, user.platformAdmin, {
             ip: req.ip, userAgent: req.headers['user-agent'],
         });
         return res.json({ accessToken, refreshToken, ...buildAuthResponse(user, user.club, user.member?.id, user.member?.photoUrl) });
@@ -396,11 +403,18 @@ router.post('/refresh', async (req, res) => {
             (0, prisma_2.recreatePrismaClient)();
         // BD indisponível — modo fallback JWT, sem rotação
     }
-    // 3. tokenVersion actual (best-effort)
-    const user = await prisma_1.prisma.user.findUnique({
-        where: { id: payload.userId },
-        select: { tokenVersion: true },
-    }).catch(() => null);
+    // 3. tokenVersion actual (best-effort) — try/catch captures both sync throws and rejected promises
+    let user = null;
+    try {
+        user = await prisma_1.prisma.user.findUnique({
+            where: { id: payload.userId },
+            select: { tokenVersion: true },
+        });
+    }
+    catch (err) {
+        if (err?.name === 'PrismaClientRustPanicError')
+            (0, prisma_2.recreatePrismaClient)();
+    }
     const tokenPayload = {
         userId: payload.userId,
         clubId: payload.clubId,
@@ -492,10 +506,15 @@ router.post('/invite/:token', async (req, res) => {
 });
 // GET /api/auth/me
 router.get('/me', auth_1.authenticate, async (req, res) => {
-    const user = await prisma_1.prisma.user.findUnique({ where: { id: req.user.userId }, include: { club: true, member: true } });
-    if (!user)
-        return res.status(404).json({ error: 'Utilizador não encontrado' });
-    return res.json(buildAuthResponse(user, user.club, user.member?.id, user.member?.photoUrl));
+    try {
+        const user = await prisma_1.prisma.user.findUnique({ where: { id: req.user.userId }, include: { club: true, member: true } });
+        if (!user)
+            return res.status(404).json({ error: 'Utilizador não encontrado' });
+        return res.json(buildAuthResponse(user, user.club, user.member?.id, user.member?.photoUrl));
+    }
+    catch {
+        return res.status(503).json({ error: 'Serviço temporariamente indisponível' });
+    }
 });
 // DEV ONLY — endpoint para testes automáticos obterem o código 2FA da BD
 // Protegido por DEV_SECRET mesmo em desenvolvimento — nunca expor em produção
