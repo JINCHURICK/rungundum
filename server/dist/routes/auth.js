@@ -50,14 +50,11 @@ const loginLimiter = (0, express_rate_limit_1.default)({
     skip: () => isDev,
     message: { error: 'Demasiadas tentativas de login. Aguarda 15 minutos.' },
 });
-const twoFALimiter = (0, express_rate_limit_1.default)({
-    windowMs: 10 * 60 * 1000,
-    max: 5,
-    standardHeaders: true,
-    legacyHeaders: false,
-    skip: () => isDev,
-    message: { error: 'Demasiadas tentativas de verificação.' },
-});
+// Tracker de tentativas 2FA por pendingToken (in-memory)
+// Progressive: 1ª vez → 10min, seguintes → 1 hora
+const twoFaAttempts = new Map();
+const MAX_2FA_ATTEMPTS = 5;
+const LOCK_DURATIONS_MS = [10 * 60 * 1000, 60 * 60 * 1000]; // 10min, 1h
 const forgotLimiter = (0, express_rate_limit_1.default)({
     windowMs: 60 * 60 * 1000,
     max: 5,
@@ -278,16 +275,27 @@ router.post('/login', loginLimiter, async (req, res) => {
         throw err;
     }
 });
-// POST /api/auth/verify-2fa — passo 2: valida código
-router.post('/verify-2fa', twoFALimiter, async (req, res) => {
+// POST /api/auth/verify-2fa — passo 2: valida código (com rate limiting progressivo por sessão)
+router.post('/verify-2fa', async (req, res) => {
     try {
         const schema = zod_1.z.object({ pendingToken: zod_1.z.string(), code: zod_1.z.string().length(6) });
         const { pendingToken, code } = schema.parse(req.body);
+        const now = Date.now();
+        const entry = twoFaAttempts.get(pendingToken) ?? { count: 0, lockedUntil: 0, lockLevel: 0 };
+        // Verificar se está bloqueado
+        if (entry.lockedUntil > now) {
+            const minutesLeft = Math.ceil((entry.lockedUntil - now) / 60000);
+            return res.status(429).json({
+                error: `Demasiadas tentativas. Aguarda ${minutesLeft} minuto${minutesLeft !== 1 ? 's' : ''}.`,
+                lockedUntil: entry.lockedUntil,
+            });
+        }
         const pending = await prisma_1.prisma.pendingAuth.findUnique({
             where: { token: pendingToken },
             include: { user: { include: { club: true, member: true } } },
         });
         if (!pending || pending.expiresAt < new Date()) {
+            twoFaAttempts.delete(pendingToken);
             return res.status(401).json({ error: 'Código expirado. Faz login novamente.' });
         }
         // Comparação constant-time para prevenir timing attacks
@@ -295,8 +303,28 @@ router.post('/verify-2fa', twoFALimiter, async (req, res) => {
         const provided = Buffer.from(code.padEnd(6));
         const codesMatch = expected.length === provided.length && (0, crypto_1.timingSafeEqual)(expected, provided);
         if (!codesMatch) {
-            return res.status(401).json({ error: 'Código incorrecto.' });
+            entry.count++;
+            const attemptsLeft = MAX_2FA_ATTEMPTS - entry.count;
+            if (attemptsLeft <= 0) {
+                const duration = LOCK_DURATIONS_MS[Math.min(entry.lockLevel, LOCK_DURATIONS_MS.length - 1)];
+                entry.lockedUntil = now + duration;
+                entry.lockLevel++;
+                entry.count = 0;
+                twoFaAttempts.set(pendingToken, entry);
+                const minutes = duration / 60000;
+                return res.status(429).json({
+                    error: `Bloqueado por ${minutes} minuto${minutes !== 1 ? 's' : ''} após demasiadas tentativas incorretas.`,
+                    lockedUntil: entry.lockedUntil,
+                });
+            }
+            twoFaAttempts.set(pendingToken, entry);
+            const warning = attemptsLeft <= 2
+                ? `Código incorrecto. Tens apenas ${attemptsLeft} tentativa${attemptsLeft !== 1 ? 's' : ''} restante${attemptsLeft !== 1 ? 's' : ''}.`
+                : 'Código incorrecto.';
+            return res.status(401).json({ error: warning, attemptsLeft });
         }
+        // Sucesso — limpar tracker e sessão pendente
+        twoFaAttempts.delete(pendingToken);
         await prisma_1.prisma.pendingAuth.delete({ where: { id: pending.id } });
         const { user } = pending;
         const { accessToken, refreshToken } = await createSession(user.id, user.clubId, user.role, user.platformAdmin, {

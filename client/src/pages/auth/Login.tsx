@@ -32,6 +32,8 @@ export default function Login() {
   const [pendingToken, setPendingToken] = useState<string | null>(null)
   const [code, setCode] = useState(['', '', '', '', '', ''])
   const codeRefs = useRef<(HTMLInputElement | null)[]>([])
+  const [twoFaWarning, setTwoFaWarning] = useState<string | null>(null)
+  const [twoFaLocked, setTwoFaLocked] = useState<number | null>(null) // timestamp
 
   // Email não verificado
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null)
@@ -65,12 +67,21 @@ export default function Login() {
     mutationFn: (codeStr: string) =>
       axios.post('/api/auth/verify-2fa', { pendingToken, code: codeStr }).then((r) => r.data),
     onSuccess: (data) => {
+      setTwoFaWarning(null)
+      setTwoFaLocked(null)
       setAuth(data)
       navigate('/dashboard')
-      toast.success(`Bem-vindo, ${data.club.name}!`)
+      toast.success(`Bem-vindo, ${data.club?.name ?? 'Rungundum'}!`)
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.error ?? 'Código incorrecto')
+      const data = err.response?.data
+      if (data?.lockedUntil) {
+        setTwoFaLocked(data.lockedUntil)
+        setTwoFaWarning(null)
+      } else {
+        setTwoFaWarning(data?.error ?? 'Código incorrecto')
+        setTwoFaLocked(null)
+      }
       setCode(['', '', '', '', '', ''])
       codeRefs.current[0]?.focus()
     },
@@ -179,6 +190,17 @@ export default function Login() {
                 </p>
               </div>
 
+              {twoFaLocked && (
+                <div className="mb-4 px-4 py-3 rounded-xl bg-red-50 border border-red-100 text-red-700 text-sm text-center">
+                  Conta bloqueada. Aguarda antes de tentar novamente.
+                </div>
+              )}
+              {twoFaWarning && !twoFaLocked && (
+                <div className={`mb-4 px-4 py-3 rounded-xl text-sm text-center border ${twoFaWarning.includes('apenas') ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-red-50 border-red-100 text-red-700'}`}>
+                  {twoFaWarning}
+                </div>
+              )}
+
               <div className="flex gap-2 justify-center mb-6" onPaste={handlePaste}>
                 {code.map((digit, idx) => (
                   <input
@@ -192,7 +214,7 @@ export default function Login() {
                     onKeyDown={(e) => handleCodeKeyDown(idx, e)}
                     className="w-11 h-14 text-center text-xl font-bold border-2 border-gray-200 rounded-xl focus:outline-none focus:border-current transition-colors"
                     style={{ borderColor: digit ? 'var(--accent)' : undefined }}
-                    disabled={verifyMutation.isPending}
+                    disabled={verifyMutation.isPending || !!twoFaLocked}
                   />
                 ))}
               </div>
