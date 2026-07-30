@@ -123,7 +123,13 @@ export default function App() {
         if (data.refreshToken) {
           useAuthStore.setState({ refreshToken: data.refreshToken })
         }
-      } catch {
+      } catch (err: any) {
+        const code = err?.response?.data?.code
+        if (code === 'SESSION_TERMINATED') {
+          sessionStorage.setItem('logout-reason', 'A sua sessão foi terminada por um novo início de sessão noutro dispositivo.')
+        } else if (code === 'IDLE_TIMEOUT') {
+          sessionStorage.setItem('logout-reason', 'A sessão expirou por inatividade.')
+        }
         logout()
       } finally {
         setInitialized(true)

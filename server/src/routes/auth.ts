@@ -87,9 +87,16 @@ function buildAuthResponse(user: any, club: any, memberId?: string, memberPhotoU
 }
 
 async function createSession(
-  userId: string, clubId: string, role: string, platformAdmin = false, tokenVersion = 0,
+  userId: string, clubId: string, role: string, platformAdmin = false,
   opts?: { ip?: string; userAgent?: string },
 ) {
+  // Incrementar tokenVersion invalida imediatamente qualquer access token activo
+  // (mesmo que ainda não tenha expirado), forçando logout na próxima chamada de API
+  const { tokenVersion } = await prisma.user.update({
+    where: { id: userId },
+    data: { tokenVersion: { increment: 1 } },
+    select: { tokenVersion: true },
+  })
   const payload: TokenPayload = { userId, clubId, role, platformAdmin, tv: tokenVersion }
   const accessToken = signAccessToken(payload)
   const refreshToken = signRefreshToken(payload)
@@ -202,7 +209,7 @@ router.post('/verify-email', async (req: Request, res: Response) => {
       data: { emailVerified: true, verificationToken: null, verificationExpires: null },
     })
 
-    const { accessToken, refreshToken } = await createSession(user.id, user.clubId, user.role, user.platformAdmin, user.tokenVersion, {
+    const { accessToken, refreshToken } = await createSession(user.id, user.clubId, user.role, user.platformAdmin, {
       ip: req.ip, userAgent: req.headers['user-agent'],
     })
     return res.json({ accessToken, refreshToken, ...buildAuthResponse(user, user.club, user.member?.id, user.member?.photoUrl) })
@@ -317,7 +324,7 @@ router.post('/verify-2fa', twoFALimiter, async (req: Request, res: Response) => 
     await prisma.pendingAuth.delete({ where: { id: pending.id } })
 
     const { user } = pending
-    const { accessToken, refreshToken } = await createSession(user.id, user.clubId, user.role, user.platformAdmin, user.tokenVersion, {
+    const { accessToken, refreshToken } = await createSession(user.id, user.clubId, user.role, user.platformAdmin, {
       ip: req.ip, userAgent: req.headers['user-agent'],
     })
     return res.json({ accessToken, refreshToken, ...buildAuthResponse(user, user.club, user.member?.id, user.member?.photoUrl) })

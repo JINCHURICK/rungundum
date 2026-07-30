@@ -1,4 +1,4 @@
-﻿import { useState, useCallback } from 'react'
+﻿import { useState, useCallback, useEffect } from 'react'
 import { Outlet, Link } from 'react-router-dom'
 import { Menu, X } from 'lucide-react'
 import Sidebar from './Sidebar'
@@ -27,6 +27,18 @@ export default function Layout() {
     onIdle: handleIdle,
     enabled: !!user,
   })
+
+  // Verificação periódica de sessão — detecta invalidação por login noutro dispositivo
+  // sem esperar que o access token expire (que levaria até 15 min)
+  useEffect(() => {
+    const CHECK_INTERVAL = 5 * 60 * 1000 // 5 minutos
+    const id = setInterval(() => {
+      api.get('/auth/me').catch(() => {
+        // Se falhar com SESSION_TERMINATED, o interceptor do api.ts trata o logout e a mensagem
+      })
+    }, CHECK_INTERVAL)
+    return () => clearInterval(id)
+  }, [])
 
   return (
     <>
