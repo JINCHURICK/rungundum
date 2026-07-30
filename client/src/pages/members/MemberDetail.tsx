@@ -34,9 +34,11 @@ export default function MemberDetail() {
   const qc = useQueryClient()
   const navigate = useNavigate()
   const photoRef = useRef<HTMLInputElement>(null)
+  const vehiclePhotoRef = useRef<HTMLInputElement>(null)
   const [editModal, setEditModal] = useState(false)
   const [vehicleModal, setVehicleModal] = useState(false)
   const [editingVehicle, setEditingVehicle] = useState<any>(null)
+  const [uploadingVehicleId, setUploadingVehicleId] = useState<string | null>(null)
   const [inviteModal, setInviteModal] = useState(false)
   const [inviteUrl, setInviteUrl] = useState<string | null>(null)
   const [inviteEmail, setInviteEmail] = useState('')
@@ -131,6 +133,15 @@ export default function MemberDetail() {
   const deleteVehicleMutation = useMutation({
     mutationFn: (vehicleId: string) => api.delete(`/members/${id}/vehicles/${vehicleId}`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['member', id] }); toast.success('Veículo eliminado') },
+  })
+
+  const vehiclePhotoMutation = useMutation({
+    mutationFn: ({ vehicleId, file }: { vehicleId: string; file: File }) => {
+      const fd = new FormData(); fd.append('photo', file)
+      return api.post(`/members/${id}/vehicles/${vehicleId}/photo`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['member', id] }); toast.success('Foto do veículo actualizada!') },
+    onError: () => toast.error('Erro ao fazer upload da foto'),
   })
 
   const certificateMutation = useMutation({
@@ -233,6 +244,17 @@ export default function MemberDetail() {
                 )}
               </div>
               <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) photoMutation.mutate(f) }} />
+              <input
+                ref={vehiclePhotoRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f && uploadingVehicleId) vehiclePhotoMutation.mutate({ vehicleId: uploadingVehicleId, file: f })
+                  e.currentTarget.value = ''
+                }}
+              />
               <p className="font-bold text-gray-900">{member.fullName}</p>
               {member.memberNumber && <p className="text-sm text-gray-500">Membro #{member.memberNumber}</p>}
               {member.user ? (
@@ -347,9 +369,23 @@ export default function MemberDetail() {
               ) : (
                 <div className="space-y-3">
                   {member.vehicles.map((v: any) => (
-                    <div key={v.id} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
-                      <div className="w-10 h-10 rounded-lg bg-white border border-gray-200 flex items-center justify-center">
-                        <Bike size={18} className="text-gray-400" />
+                    <div key={v.id} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg group">
+                      <div className="relative w-10 h-10 rounded-lg bg-white border border-gray-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                        {v.photoUrl ? (
+                          <img src={v.photoUrl} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <Bike size={18} className="text-gray-400" />
+                        )}
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => { setUploadingVehicleId(v.id); vehiclePhotoRef.current?.click() }}
+                            className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
+                            title="Alterar foto"
+                          >
+                            <Upload size={12} className="text-white" />
+                          </button>
+                        )}
                       </div>
                       <div className="flex-1">
                         <p className="font-medium text-sm">{v.brand} {v.model} {v.year ? `(${v.year})` : ''}</p>

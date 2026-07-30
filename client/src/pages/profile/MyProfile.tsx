@@ -1,7 +1,10 @@
 import { useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { Link, useNavigate } from 'react-router-dom'
-import { Upload, Bike, Map, ClipboardList, Pencil, LogOut } from 'lucide-react'
+import { Upload, Bike, Map, ClipboardList, Pencil, LogOut, Plus, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/store/auth'
@@ -9,8 +12,19 @@ import { Card, CardHeader, CardContent } from '@/components/ui/Card'
 import { RaidStatusBadge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
+import { Input, Select, Textarea } from '@/components/ui/Input'
 import { getRoleLabel, formatShortDate } from '@/lib/utils'
+
+const vehicleSchema = z.object({
+  brand: z.string().min(1, 'Marca obrigatória'),
+  model: z.string().min(1, 'Modelo obrigatório'),
+  year: z.coerce.number().int().optional(),
+  plate: z.string().optional(),
+  type: z.enum(['TRAIL', 'ROAD', 'CUSTOM', 'SCOOTER', 'SUPPORT', 'OTHER']),
+  displacement: z.coerce.number().int().optional(),
+  notes: z.string().optional(),
+})
+type VehicleData = z.infer<typeof vehicleSchema>
 
 export default function MyProfile() {
   const { user, logout, refreshToken } = useAuthStore()
@@ -28,6 +42,15 @@ export default function MyProfile() {
   const [editForm, setEditForm] = useState({ nickname: '', phone: '', emergencyContact: '', emergencyPhone: '' })
   const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
   const [pwError, setPwError] = useState('')
+  const [vehicleModal, setVehicleModal] = useState(false)
+  const [editingVehicle, setEditingVehicle] = useState<any>(null)
+  const [uploadingVehicleId, setUploadingVehicleId] = useState<string | null>(null)
+  const vehiclePhotoRef = useRef<HTMLInputElement>(null)
+
+  const vehicleForm = useForm<VehicleData>({
+    resolver: zodResolver(vehicleSchema),
+    defaultValues: { type: 'TRAIL' },
+  })
 
   const { data: member, isLoading } = useQuery({
     queryKey: ['my-profile'],
@@ -50,6 +73,41 @@ export default function MyProfile() {
     },
     onError: (err: any) => setPwError(err.response?.data?.error ?? 'Erro ao alterar password'),
   })
+
+  const memberId = user?.memberId
+
+  const addVehicleMutation = useMutation({
+    mutationFn: (data: VehicleData) => api.post(`/members/${memberId}/vehicles`, data).then((r) => r.data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['my-profile'] }); setVehicleModal(false); vehicleForm.reset({ type: 'TRAIL' }); toast.success('Veículo adicionado!') },
+    onError: () => toast.error('Erro ao adicionar veículo'),
+  })
+
+  const updateVehicleMutation = useMutation({
+    mutationFn: (data: VehicleData) => api.patch(`/members/${memberId}/vehicles/${editingVehicle.id}`, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['my-profile'] }); setVehicleModal(false); setEditingVehicle(null); toast.success('Veículo actualizado!') },
+    onError: () => toast.error('Erro ao actualizar veículo'),
+  })
+
+  const deleteVehicleMutation = useMutation({
+    mutationFn: (vehicleId: string) => api.delete(`/members/${memberId}/vehicles/${vehicleId}`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['my-profile'] }); toast.success('Veículo eliminado') },
+    onError: () => toast.error('Erro ao eliminar veículo'),
+  })
+
+  const vehiclePhotoMutation = useMutation({
+    mutationFn: ({ vehicleId, file }: { vehicleId: string; file: File }) => {
+      const fd = new FormData(); fd.append('photo', file)
+      return api.post(`/members/${memberId}/vehicles/${vehicleId}/photo`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['my-profile'] }); toast.success('Foto do veículo actualizada!') },
+    onError: () => toast.error('Erro ao fazer upload da foto'),
+  })
+
+  function openVehicleModal(vehicle?: any) {
+    if (vehicle) { setEditingVehicle(vehicle); vehicleForm.reset(vehicle) }
+    else { setEditingVehicle(null); vehicleForm.reset({ type: 'TRAIL' }) }
+    setVehicleModal(true)
+  }
 
   function handlePwSubmit() {
     setPwError('')
@@ -109,6 +167,17 @@ export default function MyProfile() {
                 </button>
               </div>
               <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) photoMutation.mutate(f) }} />
+              <input
+                ref={vehiclePhotoRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f && uploadingVehicleId) vehiclePhotoMutation.mutate({ vehicleId: uploadingVehicleId, file: f })
+                  e.currentTarget.value = ''
+                }}
+              />
               <p className="font-bold text-gray-900">{member.fullName}</p>
               {member.nickname && <p className="text-sm text-gray-500">"{member.nickname}"</p>}
               {member.memberNumber && <p className="text-xs text-gray-400 mt-1">Membro #{member.memberNumber}</p>}
@@ -190,21 +259,43 @@ export default function MyProfile() {
         {/* Right — Vehicles + Raids */}
         <div className="lg:col-span-2 space-y-6">
           {/* Vehicles */}
-          {member.vehicles?.length > 0 && (
-            <Card>
+          <Card>
               <CardHeader>
-                <div className="flex items-center gap-2">
-                  <Bike size={15} className="text-gray-500" />
-                  <h3 className="font-semibold text-sm">As minhas Motos</h3>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Bike size={15} className="text-gray-500" />
+                    <h3 className="font-semibold text-sm">As minhas Motos</h3>
+                  </div>
+                  <button
+                    onClick={() => openVehicleModal()}
+                    className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
+                  >
+                    <Plus size={13} /> Adicionar
+                  </button>
                 </div>
               </CardHeader>
               <CardContent>
+                {!member.vehicles?.length ? (
+                  <p className="text-sm text-gray-400 text-center py-4">Ainda não tens motos registadas.</p>
+                ) : (
                 <div className="space-y-3">
                   {member.vehicles.map((v: any) => (
-                    <div key={v.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                      <div className="w-9 h-9 rounded-lg bg-white border border-gray-200 flex items-center justify-center flex-shrink-0">
-                        <Bike size={16} className="text-gray-400" />
-                      </div>
+                    <div key={v.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl group">
+                      <button
+                        type="button"
+                        onClick={() => { setUploadingVehicleId(v.id); vehiclePhotoRef.current?.click() }}
+                        className="relative w-10 h-10 rounded-lg bg-white border border-gray-200 flex items-center justify-center flex-shrink-0 overflow-hidden"
+                        title="Alterar foto"
+                      >
+                        {v.photoUrl ? (
+                          <img src={v.photoUrl} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <Bike size={16} className="text-gray-400" />
+                        )}
+                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                          <Upload size={11} className="text-white" />
+                        </div>
+                      </button>
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm">{v.brand} {v.model}{v.year ? ` (${v.year})` : ''}</p>
                         <p className="text-xs text-gray-500">
@@ -212,12 +303,20 @@ export default function MyProfile() {
                           {v.plate ? ` · ${v.plate}` : ''}
                         </p>
                       </div>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => openVehicleModal(v)} className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-white rounded transition-colors">
+                          <Pencil size={13} />
+                        </button>
+                        <button onClick={() => deleteVehicleMutation.mutate(v.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-white rounded transition-colors">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
+                )}
               </CardContent>
             </Card>
-          )}
 
           {/* Raid history */}
           <Card>
@@ -341,6 +440,44 @@ export default function MyProfile() {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Vehicle Modal */}
+      <Modal
+        open={vehicleModal}
+        onClose={() => { setVehicleModal(false); setEditingVehicle(null) }}
+        title={editingVehicle ? 'Editar Veículo' : 'Adicionar Veículo'}
+      >
+        <form
+          onSubmit={vehicleForm.handleSubmit((d) =>
+            editingVehicle ? updateVehicleMutation.mutate(d) : addVehicleMutation.mutate(d)
+          )}
+          className="space-y-4"
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input label="Marca *" placeholder="Honda" error={vehicleForm.formState.errors.brand?.message} {...vehicleForm.register('brand')} />
+            <Input label="Modelo *" placeholder="Africa Twin" error={vehicleForm.formState.errors.model?.message} {...vehicleForm.register('model')} />
+            <Input label="Ano" type="number" placeholder="2022" {...vehicleForm.register('year')} />
+            <Input label="Matrícula" placeholder="00-AA-00" {...vehicleForm.register('plate')} />
+            <Select
+              label="Tipo"
+              options={[
+                { value: 'TRAIL', label: 'Trail' }, { value: 'ROAD', label: 'Estradeira' },
+                { value: 'CUSTOM', label: 'Custom' }, { value: 'SCOOTER', label: 'Scooter' },
+                { value: 'SUPPORT', label: 'Apoio' }, { value: 'OTHER', label: 'Outro' },
+              ]}
+              {...vehicleForm.register('type')}
+            />
+            <Input label="Cilindrada (cc)" type="number" placeholder="1000" {...vehicleForm.register('displacement')} />
+          </div>
+          <Textarea label="Notas técnicas" placeholder="Pneus novos, corrente a substituir..." rows={2} {...vehicleForm.register('notes')} />
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="secondary" className="flex-1" onClick={() => setVehicleModal(false)}>Cancelar</Button>
+            <Button type="submit" className="flex-1" loading={addVehicleMutation.isPending || updateVehicleMutation.isPending}>
+              {editingVehicle ? 'Guardar' : 'Adicionar'}
+            </Button>
+          </div>
+        </form>
       </Modal>
     </div>
   )
