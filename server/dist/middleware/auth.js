@@ -34,6 +34,11 @@ async function authenticate(req, res, next) {
         // Se BD falhar, deixar passar com base na assinatura JWT (disponibilidade prioritária em Hostinger)
     }
     req.user = payload;
+    // Platform admin pode aceder a qualquer clube via header X-Club-Id
+    // O clubId do JWT é substituído pelo header para pedidos cross-club
+    if (payload.platformAdmin && req.headers['x-club-id']) {
+        req.user = { ...payload, clubId: req.headers['x-club-id'] };
+    }
     next();
 }
 function requireRole(...roles) {

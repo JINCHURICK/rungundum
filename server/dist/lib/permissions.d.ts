@@ -12,7 +12,7 @@ export declare const PERM: {
     readonly POSITIONS_READ: readonly ["ADMIN", "VICE_PRESIDENT", "CAPTAIN", "TREASURER", "SECRETARY", "PR", "DISCIPLINA", "MEMBER"];
     readonly STATS: readonly ["ADMIN", "VICE_PRESIDENT", "CAPTAIN", "TREASURER", "SECRETARY", "PR", "DISCIPLINA"];
     readonly CLUB_CONFIG: readonly ["ADMIN"];
-    readonly SUBSCRIPTIONS: readonly ["ADMIN"];
+    readonly SUBSCRIPTIONS: readonly ["ADMIN", "TREASURER"];
     readonly ALERTS_CONFIG: readonly ["ADMIN", "VICE_PRESIDENT", "TREASURER"];
 };
 export type PermKey = keyof typeof PERM;

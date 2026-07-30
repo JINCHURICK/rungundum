@@ -81,7 +81,7 @@ const loginSchema = zod_1.z.object({
 function buildAuthResponse(user, club, memberId, memberPhotoUrl) {
     return {
         user: { id: user.id, email: user.email, role: user.role, memberId, platformAdmin: user.platformAdmin ?? false, photoUrl: memberPhotoUrl ?? null },
-        club: { id: club.id, name: club.name, acronym: club.acronym, accentColor: club.accentColor, logoUrl: club.logoUrl },
+        club: club ? { id: club.id, name: club.name, acronym: club.acronym, accentColor: club.accentColor, logoUrl: club.logoUrl } : null,
     };
 }
 async function createSession(userId, clubId, role, platformAdmin = false, opts) {
@@ -92,7 +92,7 @@ async function createSession(userId, clubId, role, platformAdmin = false, opts) 
         data: { tokenVersion: { increment: 1 } },
         select: { tokenVersion: true },
     });
-    const payload = { userId, clubId, role, platformAdmin, tv: tokenVersion };
+    const payload = { userId, clubId: clubId ?? '', role, platformAdmin, tv: tokenVersion };
     const accessToken = (0, jwt_1.signAccessToken)(payload);
     const refreshToken = (0, jwt_1.signRefreshToken)(payload);
     // Sessão única: invalida todas as sessões anteriores do utilizador
@@ -200,7 +200,7 @@ router.post('/verify-email', async (req, res) => {
         const { accessToken, refreshToken } = await createSession(user.id, user.clubId, user.role, user.platformAdmin, {
             ip: req.ip, userAgent: req.headers['user-agent'],
         });
-        return res.json({ accessToken, refreshToken, ...buildAuthResponse(user, user.club, user.member?.id, user.member?.photoUrl) });
+        return res.json({ accessToken, refreshToken, ...buildAuthResponse(user, user.club ?? null, user.member?.id, user.member?.photoUrl) });
     }
     catch (err) {
         if (err instanceof zod_1.z.ZodError)
@@ -223,7 +223,7 @@ router.post('/resend-verification', async (req, res) => {
         const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5173';
         (0, email_1.sendEmailVerification)({
             to: user.email,
-            clubName: user.club.name,
+            clubName: user.club?.name ?? 'Rungundum',
             verifyUrl: `${clientUrl}/verify-email/${verificationToken}`,
         }).catch(err => console.error('[Email resend]', err.message));
         return res.json({ message: 'Se o email existir e não estiver verificado, receberás um novo link.' });
@@ -266,7 +266,7 @@ router.post('/login', loginLimiter, async (req, res) => {
             create: { userId: user.id, code, token, expiresAt },
         });
         // Enviar email sem bloquear a resposta
-        (0, email_1.sendTwoFactorCode)({ to: user.email, code, clubName: user.club.name }).catch(() => { });
+        (0, email_1.sendTwoFactorCode)({ to: user.email, code, clubName: user.club?.name ?? 'Rungundum' }).catch(() => { });
         // Em desenvolvimento, mostrar o código no terminal para facilitar o teste
         if (isDev)
             console.log(`\n[2FA DEV] Código para ${user.email}: ${code}\n`);
@@ -302,7 +302,7 @@ router.post('/verify-2fa', twoFALimiter, async (req, res) => {
         const { accessToken, refreshToken } = await createSession(user.id, user.clubId, user.role, user.platformAdmin, {
             ip: req.ip, userAgent: req.headers['user-agent'],
         });
-        return res.json({ accessToken, refreshToken, ...buildAuthResponse(user, user.club, user.member?.id, user.member?.photoUrl) });
+        return res.json({ accessToken, refreshToken, ...buildAuthResponse(user, user.club ?? null, user.member?.id, user.member?.photoUrl) });
     }
     catch (err) {
         if (err instanceof zod_1.z.ZodError)
@@ -327,7 +327,7 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
         });
         // Enviar o token RAW no URL — guardar apenas o HASH na BD
         const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5173';
-        (0, email_1.sendPasswordReset)({ to: user.email, resetUrl: `${clientUrl}/reset-password/${rawToken}`, clubName: user.club.name })
+        (0, email_1.sendPasswordReset)({ to: user.email, resetUrl: `${clientUrl}/reset-password/${rawToken}`, clubName: user.club?.name ?? 'Rungundum' })
             .catch(err => console.error('[Email reset]', err.message));
         return res.json({ message: 'Se o email existir, receberás um link.' });
     }
@@ -510,7 +510,7 @@ router.get('/me', auth_1.authenticate, async (req, res) => {
         const user = await prisma_1.prisma.user.findUnique({ where: { id: req.user.userId }, include: { club: true, member: true } });
         if (!user)
             return res.status(404).json({ error: 'Utilizador não encontrado' });
-        return res.json(buildAuthResponse(user, user.club, user.member?.id, user.member?.photoUrl));
+        return res.json(buildAuthResponse(user, user.club ?? null, user.member?.id, user.member?.photoUrl));
     }
     catch {
         return res.status(503).json({ error: 'Serviço temporariamente indisponível' });

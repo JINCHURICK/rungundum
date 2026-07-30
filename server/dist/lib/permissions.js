@@ -30,7 +30,7 @@ exports.PERM = {
     // ── Configurações do clube ─────────────────────────────────────────────────
     CLUB_CONFIG: ['ADMIN'],
     // ── Subscrição / plano ─────────────────────────────────────────────────────
-    SUBSCRIPTIONS: ['ADMIN'],
+    SUBSCRIPTIONS: ['ADMIN', 'TREASURER'],
     // ── Alertas de quotas ──────────────────────────────────────────────────────
     ALERTS_CONFIG: ['ADMIN', 'VICE_PRESIDENT', 'TREASURER'],
 };

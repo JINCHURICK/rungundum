@@ -79,9 +79,13 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, EBSta
 // ── route guards ───────────────────────────────────────────────────────────────
 
 function ProtectedLayout() {
-  const { isAuthenticated, initialized } = useAuthStore()
+  const { isAuthenticated, initialized, user, club, viewingClub } = useAuthStore()
   if (!initialized) return <Spinner />
   if (!isAuthenticated()) return <Navigate to="/login" replace />
+  // Platform admin sem clube próprio e sem clube em gestão → ir para o painel de plataforma
+  if (user?.platformAdmin && !club && !viewingClub) {
+    return <Navigate to="/platform-admin" replace />
+  }
   return <Layout />
 }
 

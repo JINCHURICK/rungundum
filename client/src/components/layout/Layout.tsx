@@ -12,7 +12,8 @@ import { api } from '@/lib/api'
 export default function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [idleWarning, setIdleWarning] = useState(false)
-  const { club, user, logout } = useAuthStore()
+  const { club, user, logout, viewingClub } = useAuthStore()
+  const effectiveClub = viewingClub ?? club
 
   const handleIdle = useCallback(async () => {
     setIdleWarning(false)
@@ -87,17 +88,17 @@ export default function Layout() {
           >
             <Menu size={22} />
           </button>
-          {club?.logoUrl ? (
-            <img src={club.logoUrl} alt={club.name} className="w-7 h-7 rounded-lg object-cover flex-shrink-0" />
+          {effectiveClub?.logoUrl ? (
+            <img src={effectiveClub.logoUrl} alt={effectiveClub.name} className="w-7 h-7 rounded-lg object-cover flex-shrink-0" />
           ) : (
             <div
               className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
               style={{ backgroundColor: 'var(--accent)' }}
             >
-              {club?.acronym?.slice(0, 2) ?? 'RM'}
+              {effectiveClub?.acronym?.slice(0, 2) ?? 'RM'}
             </div>
           )}
-          <p className="font-semibold text-gray-900 text-sm truncate flex-1">{club?.name ?? 'Rungundum'}</p>
+          <p className="font-semibold text-gray-900 text-sm truncate flex-1">{effectiveClub?.name ?? 'Rungundum'}</p>
           <NotificationBell />
           <Link to="/profile" className="flex-shrink-0">
             {user?.photoUrl ? (

@@ -50,7 +50,7 @@ model Club {
 
 model User {
   id                   String    @id @default(cuid())
-  clubId               String
+  clubId               String?   // null para platform admins sem clube
   email                String    @unique
   passwordHash         String
   role                 UserRole  @default(MEMBER)
@@ -64,7 +64,7 @@ model User {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
-  club              Club               @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  club              Club?              @relation(fields: [clubId], references: [id], onDelete: Cascade)
   member            Member?
   refreshTokens     RefreshToken[]
   pendingAuth       PendingAuth?

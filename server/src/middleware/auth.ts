@@ -35,6 +35,11 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
   }
 
   req.user = payload
+  // Platform admin pode aceder a qualquer clube via header X-Club-Id
+  // O clubId do JWT é substituído pelo header para pedidos cross-club
+  if (payload.platformAdmin && req.headers['x-club-id']) {
+    req.user = { ...payload, clubId: req.headers['x-club-id'] as string }
+  }
   next()
 }
 

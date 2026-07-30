@@ -1,4 +1,5 @@
 import { Router, Response } from 'express'
+import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { authenticate, requirePlatformAdmin, AuthRequest } from '../middleware/auth'
@@ -133,6 +134,7 @@ router.get('/clubs', async (_req: AuthRequest, res: Response) => {
     select: {
       id: true, name: true, acronym: true, location: true, country: true,
       plan: true, planStatus: true, trialEndsAt: true, planExpiresAt: true, createdAt: true,
+      accentColor: true, logoUrl: true,
       _count: { select: { members: { where: { status: 'ACTIVE' } }, raids: true } },
     },
     orderBy: { createdAt: 'desc' },
@@ -259,6 +261,37 @@ router.patch('/subscription-requests/:id', async (req: AuthRequest, res: Respons
     }
 
     return res.json(updated)
+  } catch (err) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors })
+    throw err
+  }
+})
+
+// POST /api/platform-admin/create-admin — criar conta de platform admin sem clube
+router.post('/create-admin', async (req: AuthRequest, res: Response) => {
+  try {
+    const { email, password } = z.object({
+      email: z.string().email(),
+      password: z.string().min(8),
+    }).parse(req.body)
+
+    if (await prisma.user.findUnique({ where: { email } })) {
+      return res.status(400).json({ error: 'Email já registado' })
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10)
+    const user = await prisma.user.create({
+      data: {
+        clubId: null,
+        email,
+        passwordHash,
+        role: 'ADMIN',
+        emailVerified: true,
+        platformAdmin: true,
+      },
+    })
+
+    return res.status(201).json({ id: user.id, email: user.email })
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors })
     throw err

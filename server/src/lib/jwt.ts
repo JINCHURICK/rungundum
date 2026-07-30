@@ -5,7 +5,7 @@ const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET!
 
 export interface TokenPayload {
   userId: string
-  clubId: string
+  clubId: string  // '' para platform admins sem clube (usar X-Club-Id para aceder clubs)
   role: string
   platformAdmin?: boolean
   tv?: number  // tokenVersion — para invalidação imediata de sessões via BD

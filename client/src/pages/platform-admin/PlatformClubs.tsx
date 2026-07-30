@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/Card'
 import { formatShortDate } from '@/lib/utils'
-import { Search, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react'
+import { Search, ArrowRight, ChevronDown, ChevronUp, LogIn } from 'lucide-react'
+import { useAuthStore } from '@/store/auth'
 
 const PLAN_LABELS: Record<string, string> = {
   FREE: 'Gratuito', STARTER: 'Starter', PRO: 'Pro', ENTERPRISE: 'Enterprise',
@@ -30,6 +31,7 @@ interface Club {
   plan: string; planStatus: string; planLabel: string
   trialEndsAt: string | null; planExpiresAt: string | null; trialDaysLeft: number | null
   createdAt: string; membersCount: number; raidsCount: number
+  accentColor: string; logoUrl: string | null
 }
 
 export default function PlatformClubs() {
@@ -38,6 +40,8 @@ export default function PlatformClubs() {
   const [filterStatus, setFilterStatus] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('createdAt')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const { setViewingClub } = useAuthStore()
+  const navigate = useNavigate()
 
   const { data: clubs = [], isLoading } = useQuery<Club[]>({
     queryKey: ['platform-admin-clubs'],
@@ -190,12 +194,29 @@ export default function PlatformClubs() {
                         </td>
                         <td className="py-3.5 text-xs text-gray-400">{formatShortDate(club.createdAt)}</td>
                         <td className="py-3.5">
-                          <Link
-                            to={`/platform-admin/clubs/${club.id}`}
-                            className="flex items-center gap-1.5 text-xs font-medium text-red-600 hover:text-red-700 transition-colors"
-                          >
-                            Gerir <ArrowRight size={13} />
-                          </Link>
+                          <div className="flex items-center gap-3">
+                            <Link
+                              to={`/platform-admin/clubs/${club.id}`}
+                              className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
+                            >
+                              Detalhes <ArrowRight size={12} />
+                            </Link>
+                            <button
+                              onClick={() => {
+                                setViewingClub({
+                                  id: club.id,
+                                  name: club.name,
+                                  acronym: club.acronym,
+                                  accentColor: club.accentColor ?? '#dc2626',
+                                  logoUrl: club.logoUrl,
+                                })
+                                navigate('/dashboard')
+                              }}
+                              className="flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700 transition-colors"
+                            >
+                              Aceder <LogIn size={12} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )

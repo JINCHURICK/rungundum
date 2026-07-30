@@ -1,6 +1,10 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
+const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const zod_1 = require("zod");
 const prisma_1 = require("../lib/prisma");
 const auth_1 = require("../middleware/auth");
@@ -134,6 +138,7 @@ router.get('/clubs', async (_req, res) => {
         select: {
             id: true, name: true, acronym: true, location: true, country: true,
             plan: true, planStatus: true, trialEndsAt: true, planExpiresAt: true, createdAt: true,
+            accentColor: true, logoUrl: true,
             _count: { select: { members: { where: { status: 'ACTIVE' } }, raids: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -256,6 +261,35 @@ router.patch('/subscription-requests/:id', async (req, res) => {
             });
         }
         return res.json(updated);
+    }
+    catch (err) {
+        if (err instanceof zod_1.z.ZodError)
+            return res.status(400).json({ error: err.errors });
+        throw err;
+    }
+});
+// POST /api/platform-admin/create-admin — criar conta de platform admin sem clube
+router.post('/create-admin', async (req, res) => {
+    try {
+        const { email, password } = zod_1.z.object({
+            email: zod_1.z.string().email(),
+            password: zod_1.z.string().min(8),
+        }).parse(req.body);
+        if (await prisma_1.prisma.user.findUnique({ where: { email } })) {
+            return res.status(400).json({ error: 'Email já registado' });
+        }
+        const passwordHash = await bcryptjs_1.default.hash(password, 10);
+        const user = await prisma_1.prisma.user.create({
+            data: {
+                clubId: null,
+                email,
+                passwordHash,
+                role: 'ADMIN',
+                emailVerified: true,
+                platformAdmin: true,
+            },
+        });
+        return res.status(201).json({ id: user.id, email: user.email });
     }
     catch (err) {
         if (err instanceof zod_1.z.ZodError)
