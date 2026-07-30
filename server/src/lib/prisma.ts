@@ -10,7 +10,11 @@ let _instance = newClient()
 
 // Called by the global panic handler in index.ts if Prisma's Rust engine panics
 export function recreatePrismaClient() {
-  _instance = newClient()
+  try {
+    _instance = newClient()
+  } catch {
+    // Keep existing instance if new one fails to initialize
+  }
 }
 
 // Proxy delegates every property access to the current _instance.

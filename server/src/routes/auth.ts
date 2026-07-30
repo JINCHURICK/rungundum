@@ -425,11 +425,16 @@ router.post('/refresh', async (req: Request, res: Response) => {
     // BD indisponível — modo fallback JWT, sem rotação
   }
 
-  // 3. tokenVersion actual (best-effort)
-  const user = await prisma.user.findUnique({
-    where: { id: payload.userId },
-    select: { tokenVersion: true },
-  }).catch(() => null)
+  // 3. tokenVersion actual (best-effort) — try/catch captures both sync throws and rejected promises
+  let user: { tokenVersion: number } | null = null
+  try {
+    user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { tokenVersion: true },
+    })
+  } catch (err: any) {
+    if (err?.name === 'PrismaClientRustPanicError') recreatePrismaClient()
+  }
 
   const tokenPayload: TokenPayload = {
     userId: payload.userId,
