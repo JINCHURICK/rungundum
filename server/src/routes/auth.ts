@@ -527,9 +527,13 @@ router.post('/invite/:token', async (req: Request, res: Response) => {
 
 // GET /api/auth/me
 router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
-  const user = await prisma.user.findUnique({ where: { id: req.user!.userId }, include: { club: true, member: true } })
-  if (!user) return res.status(404).json({ error: 'Utilizador não encontrado' })
-  return res.json(buildAuthResponse(user, user.club, user.member?.id, user.member?.photoUrl))
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.user!.userId }, include: { club: true, member: true } })
+    if (!user) return res.status(404).json({ error: 'Utilizador não encontrado' })
+    return res.json(buildAuthResponse(user, user.club, user.member?.id, user.member?.photoUrl))
+  } catch {
+    return res.status(503).json({ error: 'Serviço temporariamente indisponível' })
+  }
 })
 
 // DEV ONLY — endpoint para testes automáticos obterem o código 2FA da BD
