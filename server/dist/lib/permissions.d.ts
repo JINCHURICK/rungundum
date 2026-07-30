@@ -9,7 +9,7 @@ export declare const PERM: {
     readonly ANNOUNCEMENTS_READ: readonly ["ADMIN", "VICE_PRESIDENT", "CAPTAIN", "TREASURER", "SECRETARY", "PR", "DISCIPLINA", "MEMBER", "GUEST"];
     readonly SMS: readonly ["ADMIN", "VICE_PRESIDENT", "TREASURER", "SECRETARY", "PR", "DISCIPLINA"];
     readonly POSITIONS_WRITE: readonly ["ADMIN", "VICE_PRESIDENT", "SECRETARY"];
-    readonly POSITIONS_READ: readonly ["ADMIN", "VICE_PRESIDENT", "CAPTAIN", "TREASURER", "SECRETARY", "PR", "DISCIPLINA", "MEMBER"];
+    readonly POSITIONS_READ: readonly ["ADMIN", "VICE_PRESIDENT", "CAPTAIN", "TREASURER", "SECRETARY", "PR", "DISCIPLINA"];
     readonly STATS: readonly ["ADMIN", "VICE_PRESIDENT", "CAPTAIN", "TREASURER", "SECRETARY", "PR", "DISCIPLINA"];
     readonly CLUB_CONFIG: readonly ["ADMIN"];
     readonly SUBSCRIPTIONS: readonly ["ADMIN", "TREASURER"];

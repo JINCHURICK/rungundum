@@ -259,8 +259,8 @@ export default function MembersList() {
           <div className="border-t pt-4">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Acesso ao sistema (opcional)</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input label="Email" type="email" placeholder="joao@clube.pt" error={errors.email?.message} {...register('email')} />
-              <Input label="Senha inicial" type="password" placeholder="Mínimo 8 caracteres" error={errors.password?.message} {...register('password')} />
+              <Input label="Email" type="email" placeholder="Email" autoComplete="off" error={errors.email?.message} {...register('email')} />
+              <Input label="Senha inicial" type="password" placeholder="Password" autoComplete="new-password" error={errors.password?.message} {...register('password')} />
             </div>
           </div>
 

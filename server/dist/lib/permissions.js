@@ -24,7 +24,7 @@ exports.PERM = {
     SMS: ['ADMIN', 'VICE_PRESIDENT', 'TREASURER', 'SECRETARY', 'PR', 'DISCIPLINA'],
     // ── Cargos / Órgãos ────────────────────────────────────────────────────────
     POSITIONS_WRITE: ['ADMIN', 'VICE_PRESIDENT', 'SECRETARY'],
-    POSITIONS_READ: ['ADMIN', 'VICE_PRESIDENT', 'CAPTAIN', 'TREASURER', 'SECRETARY', 'PR', 'DISCIPLINA', 'MEMBER'],
+    POSITIONS_READ: ['ADMIN', 'VICE_PRESIDENT', 'CAPTAIN', 'TREASURER', 'SECRETARY', 'PR', 'DISCIPLINA'],
     // ── Estatísticas ───────────────────────────────────────────────────────────
     STATS: ['ADMIN', 'VICE_PRESIDENT', 'CAPTAIN', 'TREASURER', 'SECRETARY', 'PR', 'DISCIPLINA'],
     // ── Configurações do clube ─────────────────────────────────────────────────

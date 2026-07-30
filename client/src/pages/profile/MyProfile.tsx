@@ -26,6 +26,8 @@ export default function MyProfile() {
   const photoRef = useRef<HTMLInputElement>(null)
   const [editModal, setEditModal] = useState(false)
   const [editForm, setEditForm] = useState({ nickname: '', phone: '', emergencyContact: '', emergencyPhone: '' })
+  const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
+  const [pwError, setPwError] = useState('')
 
   const { data: member, isLoading } = useQuery({
     queryKey: ['my-profile'],
@@ -38,6 +40,23 @@ export default function MyProfile() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['my-profile'] }); setEditModal(false); toast.success('Perfil actualizado!') },
     onError: () => toast.error('Erro ao actualizar perfil'),
   })
+
+  const pwMutation = useMutation({
+    mutationFn: () => api.patch('/auth/change-password', { currentPassword: pwForm.currentPassword, newPassword: pwForm.newPassword }),
+    onSuccess: () => {
+      setPwForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
+      setPwError('')
+      toast.success('Password alterada!')
+    },
+    onError: (err: any) => setPwError(err.response?.data?.error ?? 'Erro ao alterar password'),
+  })
+
+  function handlePwSubmit() {
+    setPwError('')
+    if (pwForm.newPassword !== pwForm.confirmPassword) { setPwError('As passwords não coincidem'); return }
+    if (pwForm.newPassword.length < 8) { setPwError('Nova password: mínimo 8 caracteres'); return }
+    pwMutation.mutate()
+  }
 
   const photoMutation = useMutation({
     mutationFn: (file: File) => {
@@ -282,6 +301,44 @@ export default function MyProfile() {
           <div className="flex gap-2 pt-2">
             <Button variant="secondary" className="flex-1" onClick={() => setEditModal(false)}>Cancelar</Button>
             <Button className="flex-1" loading={editMutation.isPending} onClick={() => editMutation.mutate()}>Guardar</Button>
+          </div>
+
+          <div className="border-t border-gray-100 pt-4 space-y-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Alterar password</p>
+            <Input
+              label="Password atual"
+              type="password"
+              autoComplete="current-password"
+              placeholder="Password atual"
+              value={pwForm.currentPassword}
+              onChange={(e) => setPwForm((f) => ({ ...f, currentPassword: e.target.value }))}
+            />
+            <Input
+              label="Nova password"
+              type="password"
+              autoComplete="new-password"
+              placeholder="Mínimo 8 caracteres"
+              value={pwForm.newPassword}
+              onChange={(e) => setPwForm((f) => ({ ...f, newPassword: e.target.value }))}
+            />
+            <Input
+              label="Confirmar nova password"
+              type="password"
+              autoComplete="new-password"
+              placeholder="Repetir nova password"
+              value={pwForm.confirmPassword}
+              onChange={(e) => setPwForm((f) => ({ ...f, confirmPassword: e.target.value }))}
+            />
+            {pwError && <p className="text-xs text-red-600">{pwError}</p>}
+            <Button
+              variant="secondary"
+              className="w-full"
+              loading={pwMutation.isPending}
+              disabled={!pwForm.currentPassword || !pwForm.newPassword || !pwForm.confirmPassword}
+              onClick={handlePwSubmit}
+            >
+              Alterar password
+            </Button>
           </div>
         </div>
       </Modal>

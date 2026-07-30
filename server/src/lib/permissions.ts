@@ -28,7 +28,7 @@ export const PERM = {
 
   // ── Cargos / Órgãos ────────────────────────────────────────────────────────
   POSITIONS_WRITE:      ['ADMIN', 'VICE_PRESIDENT', 'SECRETARY'],
-  POSITIONS_READ:       ['ADMIN', 'VICE_PRESIDENT', 'CAPTAIN', 'TREASURER', 'SECRETARY', 'PR', 'DISCIPLINA', 'MEMBER'],
+  POSITIONS_READ:       ['ADMIN', 'VICE_PRESIDENT', 'CAPTAIN', 'TREASURER', 'SECRETARY', 'PR', 'DISCIPLINA'],
 
   // ── Estatísticas ───────────────────────────────────────────────────────────
   STATS:                ['ADMIN', 'VICE_PRESIDENT', 'CAPTAIN', 'TREASURER', 'SECRETARY', 'PR', 'DISCIPLINA'],

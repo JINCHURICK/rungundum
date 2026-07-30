@@ -516,6 +516,22 @@ router.get('/me', auth_1.authenticate, async (req, res) => {
         return res.status(503).json({ error: 'Serviço temporariamente indisponível' });
     }
 });
+// PATCH /api/auth/change-password — alterar password do utilizador autenticado
+router.patch('/change-password', auth_1.authenticate, async (req, res) => {
+    const { currentPassword, newPassword } = zod_1.z.object({
+        currentPassword: zod_1.z.string().min(1, 'Password atual obrigatória'),
+        newPassword: zod_1.z.string().min(8, 'Nova password: mínimo 8 caracteres'),
+    }).parse(req.body);
+    const user = await prisma_1.prisma.user.findUnique({ where: { id: req.user.userId }, select: { id: true, passwordHash: true } });
+    if (!user)
+        return res.status(404).json({ error: 'Utilizador não encontrado' });
+    const valid = await bcryptjs_1.default.compare(currentPassword, user.passwordHash);
+    if (!valid)
+        return res.status(400).json({ error: 'Password atual incorreta' });
+    const passwordHash = await bcryptjs_1.default.hash(newPassword, 10);
+    await prisma_1.prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+    return res.json({ message: 'Password alterada com sucesso' });
+});
 // DEV ONLY — endpoint para testes automáticos obterem o código 2FA da BD
 // Protegido por DEV_SECRET mesmo em desenvolvimento — nunca expor em produção
 if (process.env.NODE_ENV !== 'production') {
