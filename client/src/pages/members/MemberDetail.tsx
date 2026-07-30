@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -32,6 +32,7 @@ export default function MemberDetail() {
   const { id } = useParams<{ id: string }>()
   const { user } = useAuthStore()
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const photoRef = useRef<HTMLInputElement>(null)
   const [editModal, setEditModal] = useState(false)
   const [vehicleModal, setVehicleModal] = useState(false)
@@ -41,6 +42,7 @@ export default function MemberDetail() {
   const [inviteEmail, setInviteEmail] = useState('')
   const [copied, setCopied] = useState(false)
   const [certYear, setCertYear] = useState(new Date().getFullYear())
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
 
   const { data: member, isLoading } = useQuery({
     queryKey: ['member', id],
@@ -145,6 +147,16 @@ export default function MemberDetail() {
     onError: () => toast.error('Erro ao gerar certificado'),
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: () => api.delete(`/members/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['members'] })
+      toast.success('Membro eliminado')
+      navigate('/members')
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error ?? 'Erro ao eliminar membro'),
+  })
+
   const isAdmin = ['ADMIN', 'CAPTAIN'].includes(user?.role ?? '')
 
   const inviteMutation = useMutation({
@@ -187,9 +199,14 @@ export default function MemberDetail() {
           </div>
         </div>
         {isAdmin && (
-          <Button size="sm" variant="secondary" onClick={openEditModal} className="flex-shrink-0">
-            <Edit2 size={14} /> Editar
-          </Button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Button size="sm" variant="secondary" onClick={openEditModal}>
+              <Edit2 size={14} /> Editar
+            </Button>
+            <Button size="sm" variant="danger" onClick={() => setDeleteConfirm(true)}>
+              <Trash2 size={14} />
+            </Button>
+          </div>
         )}
       </div>
 
@@ -540,6 +557,23 @@ export default function MemberDetail() {
               </Button>
             </>
           )}
+        </div>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal open={deleteConfirm} onClose={() => setDeleteConfirm(false)} title="Eliminar membro" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Tens a certeza que queres eliminar <strong>{member?.fullName}</strong>?
+            {member?.user && ' A conta de acesso ao sistema também será eliminada.'}
+            {' '}Esta acção não pode ser desfeita.
+          </p>
+          <div className="flex gap-3">
+            <Button variant="secondary" className="flex-1" onClick={() => setDeleteConfirm(false)}>Cancelar</Button>
+            <Button variant="danger" className="flex-1" loading={deleteMutation.isPending} onClick={() => deleteMutation.mutate()}>
+              Eliminar
+            </Button>
+          </div>
         </div>
       </Modal>
 

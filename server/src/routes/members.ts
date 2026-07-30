@@ -348,6 +348,19 @@ router.patch('/:memberId/vehicles/:vehicleId', async (req: AuthRequest, res: Res
 })
 
 // DELETE /api/members/:memberId/vehicles/:vehicleId
+router.delete('/:id', requirePermission('MEMBERS_WRITE'), async (req: AuthRequest, res: Response) => {
+  const member = await prisma.member.findFirst({
+    where: { id: req.params.id, clubId: req.user!.clubId },
+    select: { id: true, userId: true },
+  })
+  if (!member) return res.status(404).json({ error: 'Membro não encontrado' })
+  await prisma.member.delete({ where: { id: member.id } })
+  if (member.userId) {
+    await prisma.user.delete({ where: { id: member.userId } }).catch(() => {})
+  }
+  return res.json({ message: 'Membro eliminado' })
+})
+
 router.delete('/:memberId/vehicles/:vehicleId', async (req: AuthRequest, res: Response) => {
   const member = await prisma.member.findFirst({ where: { id: req.params.memberId, clubId: req.user!.clubId } })
   if (!member) return res.status(404).json({ error: 'Membro não encontrado' })

@@ -329,6 +329,19 @@ router.patch('/:memberId/vehicles/:vehicleId', async (req, res) => {
     }
 });
 // DELETE /api/members/:memberId/vehicles/:vehicleId
+router.delete('/:id', (0, auth_1.requirePermission)('MEMBERS_WRITE'), async (req, res) => {
+    const member = await prisma_1.prisma.member.findFirst({
+        where: { id: req.params.id, clubId: req.user.clubId },
+        select: { id: true, userId: true },
+    });
+    if (!member)
+        return res.status(404).json({ error: 'Membro não encontrado' });
+    await prisma_1.prisma.member.delete({ where: { id: member.id } });
+    if (member.userId) {
+        await prisma_1.prisma.user.delete({ where: { id: member.userId } }).catch(() => { });
+    }
+    return res.json({ message: 'Membro eliminado' });
+});
 router.delete('/:memberId/vehicles/:vehicleId', async (req, res) => {
     const member = await prisma_1.prisma.member.findFirst({ where: { id: req.params.memberId, clubId: req.user.clubId } });
     if (!member)
