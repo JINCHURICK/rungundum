@@ -36,6 +36,7 @@ const PlatformSubscriptions = lazy(() => import('@/pages/platform-admin/Platform
 const PlatformRequests    = lazy(() => import('@/pages/platform-admin/PlatformRequests'))
 const PlatformPlans       = lazy(() => import('@/pages/platform-admin/PlatformPlans'))
 const LandingPage         = lazy(() => import('@/pages/LandingPage'))
+const SubscriptionExpired = lazy(() => import('@/pages/SubscriptionExpired'))
 
 // ── loading fallback ───────────────────────────────────────────────────────────
 
@@ -164,6 +165,7 @@ export default function App() {
             <Route path="/public/:token"         element={<PublicRaid />} />
 
             <Route path="/" element={<LandingPage />} />
+            <Route path="/subscription-expired" element={<SubscriptionExpired />} />
 
             <Route element={<ProtectedLayout />}>
               <Route path="/dashboard"               element={<Dashboard />} />

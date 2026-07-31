@@ -2,7 +2,7 @@ import { Router, Response } from 'express'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
-import { authenticate, requirePlatformAdmin, AuthRequest } from '../middleware/auth'
+import { authenticate, requirePlatformAdmin, AuthRequest, invalidateClubStatusCache } from '../middleware/auth'
 import { PLAN_LABELS, PLAN_LIMITS, PLAN_PRICES, type PlanKey } from '../lib/plans'
 import { readPlanCache, writePlanCache } from '../lib/plan-cache'
 import { recreatePrismaClient } from '../lib/prisma'
@@ -190,6 +190,7 @@ router.patch('/clubs/:id/subscription', async (req: AuthRequest, res: Response) 
       },
       select: { id: true, plan: true, planStatus: true, trialEndsAt: true, planExpiresAt: true },
     })
+    if (planStatus) invalidateClubStatusCache(club.id)
     return res.json({ ...club, planLabel: PLAN_LABELS[club.plan as PlanKey] ?? club.plan })
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors })
@@ -258,6 +259,7 @@ router.patch('/subscription-requests/:id', async (req: AuthRequest, res: Respons
           ...(trialEndsAt !== undefined && { trialEndsAt: trialEndsAt ? new Date(trialEndsAt) : null }),
         },
       })
+      invalidateClubStatusCache(request.clubId)
     }
 
     return res.json(updated)

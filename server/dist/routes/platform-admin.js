@@ -192,6 +192,8 @@ router.patch('/clubs/:id/subscription', async (req, res) => {
             },
             select: { id: true, plan: true, planStatus: true, trialEndsAt: true, planExpiresAt: true },
         });
+        if (planStatus)
+            (0, auth_1.invalidateClubStatusCache)(club.id);
         return res.json({ ...club, planLabel: plans_1.PLAN_LABELS[club.plan] ?? club.plan });
     }
     catch (err) {
@@ -259,6 +261,7 @@ router.patch('/subscription-requests/:id', async (req, res) => {
                     ...(trialEndsAt !== undefined && { trialEndsAt: trialEndsAt ? new Date(trialEndsAt) : null }),
                 },
             });
+            (0, auth_1.invalidateClubStatusCache)(request.clubId);
         }
         return res.json(updated);
     }

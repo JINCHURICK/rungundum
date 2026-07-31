@@ -1,12 +1,25 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.authenticate = authenticate;
+exports.invalidateClubStatusCache = invalidateClubStatusCache;
 exports.requireRole = requireRole;
 exports.requirePermission = requirePermission;
 exports.requirePlatformAdmin = requirePlatformAdmin;
 const jwt_1 = require("../lib/jwt");
 const permissions_1 = require("../lib/permissions");
 const prisma_1 = require("../lib/prisma");
+// Cache em memória: clubId → { planStatus, cachedAt }
+// Evita query extra à BD em cada pedido — TTL de 5 minutos
+const clubStatusCache = new Map();
+const CLUB_CACHE_TTL = 5 * 60 * 1000;
+// Rotas isentas da verificação de subscrição
+const SUBSCRIPTION_EXEMPT = [
+    '/api/auth',
+    '/api/public',
+    '/api/plans',
+    '/api/subscriptions',
+    '/api/platform-admin',
+];
 async function authenticate(req, res, next) {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
@@ -35,11 +48,45 @@ async function authenticate(req, res, next) {
     }
     req.user = payload;
     // Platform admin pode aceder a qualquer clube via header X-Club-Id
-    // O clubId do JWT é substituído pelo header para pedidos cross-club
     if (payload.platformAdmin && req.headers['x-club-id']) {
         req.user = { ...payload, clubId: req.headers['x-club-id'] };
     }
+    // ── Verificação de subscrição ────────────────────────────────────────────────
+    // Só para membros de clube (não platform admins, não rotas isentas)
+    const exempted = SUBSCRIPTION_EXEMPT.some(p => req.originalUrl.startsWith(p));
+    if (payload.clubId && !payload.platformAdmin && !exempted) {
+        try {
+            const now = Date.now();
+            const cached = clubStatusCache.get(payload.clubId);
+            let planStatus;
+            if (cached && (now - cached.cachedAt) < CLUB_CACHE_TTL) {
+                planStatus = cached.status;
+            }
+            else {
+                const club = await prisma_1.prisma.club.findUnique({
+                    where: { id: payload.clubId },
+                    select: { planStatus: true },
+                });
+                planStatus = club?.planStatus ?? 'ACTIVE';
+                clubStatusCache.set(payload.clubId, { status: planStatus, cachedAt: now });
+            }
+            if (planStatus === 'EXPIRED' || planStatus === 'CANCELLED') {
+                return res.status(402).json({
+                    error: 'A subscrição do clube expirou. Contacta o administrador.',
+                    code: 'SUBSCRIPTION_EXPIRED',
+                    planStatus,
+                });
+            }
+        }
+        catch {
+            // Se BD falhar, não bloquear — disponibilidade primeiro
+        }
+    }
     next();
+}
+// Permite invalidar o cache de um clube imediatamente (ex: após renovação)
+function invalidateClubStatusCache(clubId) {
+    clubStatusCache.delete(clubId);
 }
 function requireRole(...roles) {
     return (req, res, next) => {

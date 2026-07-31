@@ -22,6 +22,10 @@ api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config
+    if (error.response?.status === 402 && error.response?.data?.code === 'SUBSCRIPTION_EXPIRED') {
+      window.location.href = '/subscription-expired'
+      return Promise.reject(error)
+    }
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true
       try {
