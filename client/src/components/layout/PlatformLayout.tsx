@@ -1,10 +1,12 @@
-﻿import { useState } from 'react'
+﻿import { useState, useCallback } from 'react'
 import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom'
 import { LayoutDashboard, Building2, CreditCard, LogOut, Menu, X, ChevronLeft, Bell, Settings2 } from 'lucide-react'
 import { useAuthStore } from '@/store/auth'
 import { cn } from '@/lib/utils'
 import { api } from '@/lib/api'
 import toast from 'react-hot-toast'
+import { useIdleTimer } from '@/hooks/useIdleTimer'
+import { IdleWarningModal } from '@/components/IdleWarningModal'
 
 const navItems = [
   { to: '/platform-admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
@@ -87,8 +89,30 @@ function PlatformSidebar({ onNavigate }: { onNavigate?: () => void }) {
 
 export default function PlatformLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [idleWarning, setIdleWarning] = useState(false)
+  const { user, logout } = useAuthStore()
+
+  const handleIdle = useCallback(async () => {
+    setIdleWarning(false)
+    sessionStorage.setItem('logout-reason', 'A sessão expirou por inatividade (10 minutos).')
+    try { await api.post('/auth/logout') } catch {}
+    logout()
+    window.location.href = '/login'
+  }, [logout])
+
+  useIdleTimer({
+    onWarn: useCallback(() => setIdleWarning(true), []),
+    onIdle: handleIdle,
+    enabled: !!user,
+  })
 
   return (
+    <>
+    <IdleWarningModal
+      open={idleWarning}
+      onContinue={() => setIdleWarning(false)}
+      onLogout={handleIdle}
+    />
     <div className="flex bg-gray-50 min-h-screen">
       {/* Sidebar desktop */}
       <div className="hidden lg:block flex-shrink-0">
@@ -132,5 +156,6 @@ export default function PlatformLayout() {
         </div>
       </div>
     </div>
+    </>
   )
 }

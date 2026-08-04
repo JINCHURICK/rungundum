@@ -409,19 +409,28 @@ router.post('/refresh', async (req, res) => {
     catch {
         return res.status(401).json({ error: 'Refresh token inválido' });
     }
-    // 2. Verificar token na BD (sessão única)
+    // 2. Verificar token na BD (sessão única) + idle timeout por inactividade
     // "não encontrado" = sessão terminada por outro login/logout
     // Erro de BD = Prisma panic no Hostinger → continuar com JWT apenas (sem rotação)
+    const IDLE_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000; // 7 dias sem actividade
     let tokenConfirmedInDb = false;
     try {
         const found = await prisma_1.prisma.refreshToken.findUnique({
             where: { token: refreshToken },
-            select: { id: true },
+            select: { id: true, lastUsedAt: true },
         });
         if (!found) {
             return res.status(401).json({
                 error: 'A sua sessão foi terminada. Por favor autentique-se novamente.',
                 code: 'SESSION_TERMINATED',
+            });
+        }
+        // Sessão inactiva há mais de 7 dias → forçar novo login
+        if (found.lastUsedAt && Date.now() - found.lastUsedAt.getTime() > IDLE_TIMEOUT_MS) {
+            await prisma_1.prisma.refreshToken.deleteMany({ where: { token: refreshToken } }).catch(() => { });
+            return res.status(401).json({
+                error: 'Sessão expirada por inatividade. Faz login novamente.',
+                code: 'IDLE_TIMEOUT',
             });
         }
         tokenConfirmedInDb = true;
