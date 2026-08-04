@@ -21,7 +21,8 @@ const DEFAULT_PLAN_CONFIGS = [
 // GET /api/plans/public — reads from file cache (no Prisma); falls back to defaults
 // File cache is written by PUT /api/platform-admin/plan-configs
 router.get('/public', (_req, res) => {
-  const configs = readPlanCache() ?? DEFAULT_PLAN_CONFIGS
+  const cached = readPlanCache()
+  const configs = (cached && cached.length > 0) ? cached : DEFAULT_PLAN_CONFIGS
   return res.json(
     configs
       .filter((c: any) => c.active !== false)

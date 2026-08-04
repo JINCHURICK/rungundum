@@ -1,9 +1,9 @@
 ﻿import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import axios from 'axios'
 import { Shield, Map, Users, BarChart2, Bell, CheckCircle2, ArrowRight, Star, Bike, LayoutDashboard } from 'lucide-react'
 import { useAuthStore } from '@/store/auth'
-import { api } from '@/lib/api'
 
 // Muda para true para mostrar a secção de preços/planos na landing page
 const SHOW_PRICING = true
@@ -49,7 +49,7 @@ export default function LandingPage() {
 
   const { data: dbPlans = [], isLoading: dbPlansLoading } = useQuery<any[]>({
     queryKey: ['plans-public'],
-    queryFn:  () => api.get('/plans/public').then(r => r.data),
+    queryFn:  () => axios.get('/api/plans/public').then(r => r.data),
     staleTime: 5 * 60 * 1000,
   })
 
