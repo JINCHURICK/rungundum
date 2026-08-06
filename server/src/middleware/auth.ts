@@ -67,9 +67,16 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
       } else {
         const club = await prisma.club.findUnique({
           where: { id: payload.clubId },
-          select: { planStatus: true },
+          select: { planStatus: true, planExpiresAt: true, trialEndsAt: true },
         })
         planStatus = club?.planStatus ?? 'ACTIVE'
+        // Verificação automática por data — garante enforcement mesmo sem update manual do status
+        const nowDate = new Date()
+        if ((planStatus === 'ACTIVE' || planStatus === 'TRIAL') && club?.planExpiresAt && club.planExpiresAt < nowDate) {
+          planStatus = 'EXPIRED'
+        } else if (planStatus === 'TRIAL' && club?.trialEndsAt && club.trialEndsAt < nowDate) {
+          planStatus = 'EXPIRED'
+        }
         clubStatusCache.set(payload.clubId, { status: planStatus, cachedAt: now })
       }
       if (planStatus === 'EXPIRED' || planStatus === 'CANCELLED') {

@@ -29,14 +29,14 @@ export default function Layout() {
     enabled: !!user,
   })
 
-  // Verificação periódica de sessão — detecta invalidação por login noutro dispositivo
-  // sem esperar que o access token expire (que levaria até 15 min)
+  // Verificação periódica — detecta sessão terminada E subscrição expirada
+  // Usa /raids (rota não isenta) para que o middleware de auth também verifique a subscrição
+  // Se SESSION_TERMINATED → interceptor de 401 faz logout
+  // Se SUBSCRIPTION_EXPIRED → interceptor de 402 redireciona para /subscription-expired
   useEffect(() => {
     const CHECK_INTERVAL = 5 * 60 * 1000 // 5 minutos
     const id = setInterval(() => {
-      api.get('/auth/me').catch(() => {
-        // Se falhar com SESSION_TERMINATED, o interceptor do api.ts trata o logout e a mensagem
-      })
+      api.get('/clubs/me').catch(() => {})
     }, CHECK_INTERVAL)
     return () => clearInterval(id)
   }, [])
