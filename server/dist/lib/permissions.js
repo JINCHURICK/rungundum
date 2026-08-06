@@ -6,33 +6,33 @@ exports.PERM = void 0;
 exports.can = can;
 exports.PERM = {
     // ── Raids ──────────────────────────────────────────────────────────────────
-    RAIDS_WRITE: ['ADMIN', 'VICE_PRESIDENT', 'CAPTAIN'],
+    RAIDS_WRITE: ['ADMIN', 'APP_ADMIN', 'VICE_PRESIDENT', 'CAPTAIN'],
     // ── Membros ────────────────────────────────────────────────────────────────
-    MEMBERS_READ: ['ADMIN', 'VICE_PRESIDENT', 'CAPTAIN', 'SECRETARY', 'PR', 'TREASURER', 'DISCIPLINA'],
-    MEMBERS_WRITE: ['ADMIN', 'VICE_PRESIDENT', 'CAPTAIN', 'SECRETARY'],
+    MEMBERS_READ: ['ADMIN', 'APP_ADMIN', 'VICE_PRESIDENT', 'CAPTAIN', 'SECRETARY', 'PR', 'TREASURER', 'DISCIPLINA'],
+    MEMBERS_WRITE: ['ADMIN', 'APP_ADMIN', 'VICE_PRESIDENT', 'CAPTAIN', 'SECRETARY'],
     // ── Tesouraria ─────────────────────────────────────────────────────────────
-    TREASURY: ['ADMIN', 'VICE_PRESIDENT', 'TREASURER'],
+    TREASURY: ['ADMIN', 'APP_ADMIN', 'VICE_PRESIDENT', 'TREASURER'],
     // ── Quotas ─────────────────────────────────────────────────────────────────
-    QUOTAS: ['ADMIN', 'VICE_PRESIDENT', 'TREASURER'],
+    QUOTAS: ['ADMIN', 'APP_ADMIN', 'VICE_PRESIDENT', 'TREASURER'],
     // ── Disciplinar ────────────────────────────────────────────────────────────
-    DISCIPLINARY: ['ADMIN', 'VICE_PRESIDENT', 'DISCIPLINA'],
+    DISCIPLINARY: ['ADMIN', 'APP_ADMIN', 'VICE_PRESIDENT', 'DISCIPLINA'],
     // ── Comunicados (escrita) ──────────────────────────────────────────────────
-    ANNOUNCEMENTS_WRITE: ['ADMIN', 'VICE_PRESIDENT', 'SECRETARY', 'PR'],
+    ANNOUNCEMENTS_WRITE: ['ADMIN', 'APP_ADMIN', 'VICE_PRESIDENT', 'SECRETARY', 'PR'],
     // Comunicados (leitura) — todos os membros autenticados vêem
-    ANNOUNCEMENTS_READ: ['ADMIN', 'VICE_PRESIDENT', 'CAPTAIN', 'TREASURER', 'SECRETARY', 'PR', 'DISCIPLINA', 'MEMBER', 'GUEST'],
+    ANNOUNCEMENTS_READ: ['ADMIN', 'APP_ADMIN', 'VICE_PRESIDENT', 'CAPTAIN', 'TREASURER', 'SECRETARY', 'PR', 'DISCIPLINA', 'MEMBER', 'GUEST'],
     // ── SMS ────────────────────────────────────────────────────────────────────
-    SMS: ['ADMIN', 'VICE_PRESIDENT', 'TREASURER', 'SECRETARY', 'PR', 'DISCIPLINA'],
+    SMS: ['ADMIN', 'APP_ADMIN', 'VICE_PRESIDENT', 'TREASURER', 'SECRETARY', 'PR', 'DISCIPLINA'],
     // ── Cargos / Órgãos ────────────────────────────────────────────────────────
-    POSITIONS_WRITE: ['ADMIN', 'VICE_PRESIDENT', 'SECRETARY'],
-    POSITIONS_READ: ['ADMIN', 'VICE_PRESIDENT', 'CAPTAIN', 'TREASURER', 'SECRETARY', 'PR', 'DISCIPLINA'],
+    POSITIONS_WRITE: ['ADMIN', 'APP_ADMIN', 'VICE_PRESIDENT', 'SECRETARY'],
+    POSITIONS_READ: ['ADMIN', 'APP_ADMIN', 'VICE_PRESIDENT', 'CAPTAIN', 'TREASURER', 'SECRETARY', 'PR', 'DISCIPLINA'],
     // ── Estatísticas ───────────────────────────────────────────────────────────
-    STATS: ['ADMIN', 'VICE_PRESIDENT', 'CAPTAIN', 'TREASURER', 'SECRETARY', 'PR', 'DISCIPLINA'],
+    STATS: ['ADMIN', 'APP_ADMIN', 'VICE_PRESIDENT', 'CAPTAIN', 'TREASURER', 'SECRETARY', 'PR', 'DISCIPLINA'],
     // ── Configurações do clube ─────────────────────────────────────────────────
-    CLUB_CONFIG: ['ADMIN'],
+    CLUB_CONFIG: ['ADMIN', 'APP_ADMIN'],
     // ── Subscrição / plano ─────────────────────────────────────────────────────
-    SUBSCRIPTIONS: ['ADMIN', 'TREASURER'],
+    SUBSCRIPTIONS: ['ADMIN', 'APP_ADMIN', 'TREASURER'],
     // ── Alertas de quotas ──────────────────────────────────────────────────────
-    ALERTS_CONFIG: ['ADMIN', 'VICE_PRESIDENT', 'TREASURER'],
+    ALERTS_CONFIG: ['ADMIN', 'APP_ADMIN', 'VICE_PRESIDENT', 'TREASURER'],
 };
 function can(role, perm) {
     if (!role)

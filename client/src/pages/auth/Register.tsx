@@ -1,5 +1,5 @@
 ﻿import { useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Link } from 'react-router-dom'
@@ -8,7 +8,7 @@ import toast from 'react-hot-toast'
 import axios from 'axios'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { CheckCircle, Mail } from 'lucide-react'
+import { CheckCircle, Mail, Crown, Settings } from 'lucide-react'
 
 const schema = z.object({
   clubName: z.string().min(2, 'Nome do clube obrigatório'),
@@ -18,11 +18,27 @@ const schema = z.object({
   email: z.string().email('Email inválido'),
   password: z.string().min(8, 'Mínimo 8 caracteres'),
   confirmPassword: z.string(),
+  role: z.enum(['ADMIN', 'APP_ADMIN']),
 }).refine((d) => d.password === d.confirmPassword, {
   message: 'As senhas não coincidem',
   path: ['confirmPassword'],
 })
 type FormData = z.infer<typeof schema>
+
+const ROLE_OPTIONS = [
+  {
+    value: 'ADMIN' as const,
+    label: 'Presidente',
+    description: 'Fundador e responsável máximo do clube',
+    Icon: Crown,
+  },
+  {
+    value: 'APP_ADMIN' as const,
+    label: 'Adm. App',
+    description: 'Administrador técnico com acesso total à aplicação',
+    Icon: Settings,
+  },
+]
 
 const features = [
   'Raids criados em menos de 15 minutos',
@@ -33,7 +49,10 @@ const features = [
 
 export default function Register() {
   const [registeredEmail, setRegisteredEmail] = useState<string | null>(null)
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({ resolver: zodResolver(schema) })
+  const { register, handleSubmit, control, formState: { errors } } = useForm<FormData>({
+    resolver: zodResolver(schema),
+    defaultValues: { role: 'ADMIN' },
+  })
 
   const mutation = useMutation({
     mutationFn: (data: FormData) => axios.post('/api/auth/register', data).then((r) => r.data),
@@ -119,6 +138,34 @@ export default function Register() {
             <div className="border-t border-gray-100 pt-4">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Conta do Administrador</p>
               <div className="space-y-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Papel no sistema</p>
+                  <Controller
+                    name="role"
+                    control={control}
+                    render={({ field }) => (
+                      <div className="grid grid-cols-2 gap-2">
+                        {ROLE_OPTIONS.map(({ value, label, description, Icon }) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => field.onChange(value)}
+                            className={[
+                              'flex flex-col items-start gap-1 rounded-xl border-2 p-3 text-left transition-all',
+                              field.value === value
+                                ? 'border-blue-600 bg-blue-50'
+                                : 'border-gray-200 hover:border-gray-300',
+                            ].join(' ')}
+                          >
+                            <Icon className={`w-4 h-4 ${field.value === value ? 'text-blue-600' : 'text-gray-400'}`} />
+                            <span className={`text-sm font-semibold ${field.value === value ? 'text-blue-700' : 'text-gray-700'}`}>{label}</span>
+                            <span className="text-xs text-gray-400 leading-snug">{description}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  />
+                </div>
                 <Input label="Nome completo" placeholder="João Silva" error={errors.fullName?.message} {...register('fullName')} />
                 <Input label="Email" type="email" placeholder="joao@clube.ao" error={errors.email?.message} {...register('email')} />
                 <Input label="Senha" type="password" placeholder="Mínimo 8 caracteres" error={errors.password?.message} {...register('password')} />

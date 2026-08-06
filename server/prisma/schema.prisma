@@ -402,6 +402,7 @@ enum LeagueStatus {
 
 enum UserRole {
   ADMIN           // Presidente — acesso total
+  APP_ADMIN       // Administrador da App — acesso total, papel técnico
   VICE_PRESIDENT  // Vice-Presidente — tudo excepto config do clube e subscrição
   TREASURER       // Tesoureiro — tesouraria, quotas, SMS
   SECRETARY       // Secretário — membros, comunicados, cargos, SMS

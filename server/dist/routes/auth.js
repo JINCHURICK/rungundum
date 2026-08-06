@@ -70,6 +70,7 @@ const registerSchema = zod_1.z.object({
     email: zod_1.z.string().email(),
     password: zod_1.z.string().min(8),
     fullName: zod_1.z.string().min(2),
+    role: zod_1.z.enum(['ADMIN', 'APP_ADMIN']).default('ADMIN'),
 });
 const loginSchema = zod_1.z.object({
     email: zod_1.z.string().email(),
@@ -140,7 +141,7 @@ router.post('/register', async (req, res) => {
             },
         });
         const user = await prisma_1.prisma.user.create({
-            data: { clubId: club.id, email: data.email, passwordHash, role: 'ADMIN', verificationToken, verificationExpires },
+            data: { clubId: club.id, email: data.email, passwordHash, role: data.role, verificationToken, verificationExpires },
         });
         const member = await prisma_1.prisma.member.create({
             data: { clubId: club.id, userId: user.id, fullName: data.fullName, status: 'ACTIVE' },
