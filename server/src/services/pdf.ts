@@ -1,8 +1,37 @@
 import puppeteer from 'puppeteer'
+import { accessSync } from 'fs'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { resolveImageForPuppeteer } from './cloudinary'
 import { getDefaultChecklist } from './checklist'
+
+// Localiza o Chrome/Chromium disponível no servidor.
+// Ordem: variável de ambiente > caminhos comuns em Linux > bundled do Puppeteer.
+function resolveChromePath(): string | undefined {
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) return process.env.PUPPETEER_EXECUTABLE_PATH
+  const candidates = [
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/google-chrome',
+    '/usr/local/bin/chromium-browser',
+    '/usr/local/bin/chromium',
+    '/snap/bin/chromium',
+  ]
+  for (const p of candidates) {
+    try { accessSync(p); return p } catch {}
+  }
+  return undefined
+}
+
+async function launchBrowser() {
+  const executablePath = resolveChromePath()
+  return puppeteer.launch({
+    headless: true,
+    executablePath,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+  })
+}
 
 interface PDFOptions {
   includeRoster?: boolean
@@ -391,10 +420,7 @@ ${opts.includeStatutes && club.statutesText ? `
       <span>Pag. <span class="pageNumber"></span> / <span class="totalPages"></span></span>
     </div>`
 
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  })
+  const browser = await launchBrowser()
   const page = await browser.newPage()
   await page.setContent(html, { waitUntil: 'domcontentloaded' })
   const pdf = await page.pdf({
@@ -717,10 +743,7 @@ export async function generateMemberCertificate(member: any, club: any, year: nu
 </body>
 </html>`
 
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  })
+  const browser = await launchBrowser()
   const page = await browser.newPage()
   await page.setContent(html, { waitUntil: 'domcontentloaded' })
   const pdf = await page.pdf({
@@ -939,10 +962,7 @@ ${hasFinance ? `
 </body>
 </html>`
 
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  })
+  const browser = await launchBrowser()
   const page = await browser.newPage()
   await page.setContent(reportHtml, { waitUntil: 'domcontentloaded' })
   const pdf = await page.pdf({
@@ -1178,7 +1198,7 @@ ${membersHTML}
 }
 
 async function launchPuppeteerPDF(html: string): Promise<Buffer> {
-  const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] })
+  const browser = await launchBrowser()
   const page = await browser.newPage()
   await page.setContent(html, { waitUntil: 'domcontentloaded' })
   const pdf = await page.pdf({

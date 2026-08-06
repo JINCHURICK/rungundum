@@ -9,10 +9,42 @@ exports.generateAnnualReport = generateAnnualReport;
 exports.generateMemberProfilePDF = generateMemberProfilePDF;
 exports.generateAllMembersProfilesPDF = generateAllMembersProfilesPDF;
 const puppeteer_1 = __importDefault(require("puppeteer"));
+const fs_1 = require("fs");
 const date_fns_1 = require("date-fns");
 const locale_1 = require("date-fns/locale");
 const cloudinary_1 = require("./cloudinary");
 const checklist_1 = require("./checklist");
+// Localiza o Chrome/Chromium disponível no servidor.
+// Ordem: variável de ambiente > caminhos comuns em Linux > bundled do Puppeteer.
+function resolveChromePath() {
+    if (process.env.PUPPETEER_EXECUTABLE_PATH)
+        return process.env.PUPPETEER_EXECUTABLE_PATH;
+    const candidates = [
+        '/usr/bin/chromium-browser',
+        '/usr/bin/chromium',
+        '/usr/bin/google-chrome-stable',
+        '/usr/bin/google-chrome',
+        '/usr/local/bin/chromium-browser',
+        '/usr/local/bin/chromium',
+        '/snap/bin/chromium',
+    ];
+    for (const p of candidates) {
+        try {
+            (0, fs_1.accessSync)(p);
+            return p;
+        }
+        catch { }
+    }
+    return undefined;
+}
+async function launchBrowser() {
+    const executablePath = resolveChromePath();
+    return puppeteer_1.default.launch({
+        headless: true,
+        executablePath,
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    });
+}
 async function generateRaidPDF(raid, club, options = {}) {
     const resolvedLogoUrl = (0, cloudinary_1.resolveImageForPuppeteer)(club.logoUrl);
     club = { ...club, logoUrl: resolvedLogoUrl };
@@ -383,10 +415,7 @@ ${opts.includeStatutes && club.statutesText ? `
       <span>${raid.title} &middot; ${raidDate}</span>
       <span>Pag. <span class="pageNumber"></span> / <span class="totalPages"></span></span>
     </div>`;
-    const browser = await puppeteer_1.default.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
+    const browser = await launchBrowser();
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'domcontentloaded' });
     const pdf = await page.pdf({
@@ -700,10 +729,7 @@ async function generateMemberCertificate(member, club, year) {
 <div class="watermark">${club.acronym ?? club.name} · RaidManager · ${year}</div>
 </body>
 </html>`;
-    const browser = await puppeteer_1.default.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
+    const browser = await launchBrowser();
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'domcontentloaded' });
     const pdf = await page.pdf({
@@ -909,10 +935,7 @@ ${hasFinance ? `
 </div>
 </body>
 </html>`;
-    const browser = await puppeteer_1.default.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
+    const browser = await launchBrowser();
     const page = await browser.newPage();
     await page.setContent(reportHtml, { waitUntil: 'domcontentloaded' });
     const pdf = await page.pdf({
@@ -1136,7 +1159,7 @@ ${membersHTML}
 </html>`;
 }
 async function launchPuppeteerPDF(html) {
-    const browser = await puppeteer_1.default.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+    const browser = await launchBrowser();
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'domcontentloaded' });
     const pdf = await page.pdf({
