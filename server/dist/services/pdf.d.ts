@@ -17,5 +17,7 @@ export declare function generateAnnualReport(params: {
     members: any[];
     transactions: any[];
 }): Promise<Buffer>;
+export declare function generateMemberProfilePDF(member: any, club: any): Promise<Buffer>;
+export declare function generateAllMembersProfilesPDF(members: any[], club: any): Promise<Buffer>;
 export {};
 //# sourceMappingURL=pdf.d.ts.map

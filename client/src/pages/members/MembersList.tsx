@@ -67,7 +67,25 @@ export default function MembersList() {
     onError: (err: any) => toast.error(err.response?.data?.error ?? 'Erro ao adicionar membro'),
   })
 
-  const isAdmin = ['ADMIN', 'CAPTAIN'].includes(user?.role ?? '')
+  const isAdmin = ['ADMIN', 'APP_ADMIN', 'CAPTAIN'].includes(user?.role ?? '')
+  const canExportProfiles = ['ADMIN', 'APP_ADMIN'].includes(user?.role ?? '')
+
+  const [exportingProfiles, setExportingProfiles] = useState(false)
+  function exportAllProfiles() {
+    setExportingProfiles(true)
+    api.post('/pdf/members-all', {}, { responseType: 'blob' })
+      .then((r) => {
+        const disposition = r.headers['content-disposition'] as string | undefined
+        const utf8 = disposition?.match(/filename\*=UTF-8''([^;]+)/i)
+        const filename = utf8 ? decodeURIComponent(utf8[1].trim()) : 'Fichas de Membros.pdf'
+        const url = URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }))
+        const a = document.createElement('a'); a.href = url; a.download = filename; a.click()
+        URL.revokeObjectURL(url)
+        toast.success('Fichas exportadas!')
+      })
+      .catch(() => toast.error('Erro ao exportar fichas'))
+      .finally(() => setExportingProfiles(false))
+  }
 
   return (
     <div className="fade-in space-y-4">
@@ -89,6 +107,12 @@ export default function MembersList() {
               <FileDown size={14} />
               CSV
             </Button>
+            {canExportProfiles && (
+              <Button size="sm" variant="secondary" onClick={exportAllProfiles} loading={exportingProfiles}>
+                <FileDown size={14} />
+                Fichas PDF
+              </Button>
+            )}
             <Button size="sm" onClick={() => setAddModal(true)}>
               <Plus size={15} />
               Adicionar

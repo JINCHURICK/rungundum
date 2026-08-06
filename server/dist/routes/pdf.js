@@ -128,6 +128,61 @@ router.post('/members/:memberId/certificate', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
     return res.send(pdf);
 });
+// POST /api/pdf/members-all — fichas de todos os membros (ADMIN / APP_ADMIN)
+router.post('/members-all', async (req, res) => {
+    const role = req.user.role;
+    if (role !== 'ADMIN' && role !== 'APP_ADMIN')
+        return res.status(403).json({ error: 'Sem permissão' });
+    const clubId = req.user.clubId;
+    const [club, members] = await Promise.all([
+        prisma_1.prisma.club.findUnique({ where: { id: clubId } }),
+        prisma_1.prisma.member.findMany({
+            where: { clubId },
+            orderBy: [{ status: 'asc' }, { fullName: 'asc' }],
+            include: {
+                vehicles: { orderBy: { createdAt: 'asc' } },
+                positions: { orderBy: { startDate: 'desc' } },
+                quotas: { orderBy: { year: 'desc' }, take: 1 },
+            },
+        }),
+    ]);
+    if (!club)
+        return res.status(404).json({ error: 'Clube não encontrado' });
+    if (!members.length)
+        return res.status(404).json({ error: 'Sem membros para exportar' });
+    const pdf = await (0, pdf_1.generateAllMembersProfilesPDF)(members, club);
+    const clean = (s) => s.replace(/[<>:"/\\|?*]/g, '').trim();
+    const filename = `Fichas de Membros - ${clean(club.name)}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    return res.send(pdf);
+});
+// POST /api/pdf/members/:memberId/profile — ficha de um membro (ADMIN / APP_ADMIN)
+router.post('/members/:memberId/profile', async (req, res) => {
+    const role = req.user.role;
+    if (role !== 'ADMIN' && role !== 'APP_ADMIN')
+        return res.status(403).json({ error: 'Sem permissão' });
+    const member = await prisma_1.prisma.member.findFirst({
+        where: { id: req.params.memberId, clubId: req.user.clubId },
+        include: {
+            vehicles: { orderBy: { createdAt: 'asc' } },
+            positions: { orderBy: { startDate: 'desc' } },
+            quotas: { orderBy: { year: 'desc' }, take: 1 },
+        },
+    });
+    if (!member)
+        return res.status(404).json({ error: 'Membro não encontrado' });
+    const club = await prisma_1.prisma.club.findUnique({ where: { id: req.user.clubId } });
+    if (!club)
+        return res.status(404).json({ error: 'Clube não encontrado' });
+    const pdf = await (0, pdf_1.generateMemberProfilePDF)(member, club);
+    const clean = (s) => s.replace(/[<>:"/\\|?*]/g, '').trim();
+    const name = clean(member.nickname ?? member.fullName);
+    const filename = `Ficha - ${name}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    return res.send(pdf);
+});
 // POST /api/pdf/annual-report
 router.post('/annual-report', async (req, res) => {
     const yearRaw = req.body?.year;

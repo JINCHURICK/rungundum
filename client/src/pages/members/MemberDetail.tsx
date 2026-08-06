@@ -4,7 +4,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { ArrowLeft, Upload, Plus, Pencil, Trash2, Bike, Map, Mail, Copy, Check, Award, Edit2 } from 'lucide-react'
+import { ArrowLeft, Upload, Plus, Pencil, Trash2, Bike, Map, Mail, Copy, Check, Award, Edit2, FileDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/store/auth'
@@ -168,7 +168,22 @@ export default function MemberDetail() {
     onError: (err: any) => toast.error(err.response?.data?.error ?? 'Erro ao eliminar membro'),
   })
 
-  const isAdmin = ['ADMIN', 'CAPTAIN'].includes(user?.role ?? '')
+  const isAdmin = ['ADMIN', 'APP_ADMIN', 'CAPTAIN'].includes(user?.role ?? '')
+  const canExportProfile = ['ADMIN', 'APP_ADMIN'].includes(user?.role ?? '')
+
+  const profileMutation = useMutation({
+    mutationFn: () => api.post(`/pdf/members/${id}/profile`, {}, { responseType: 'blob' }),
+    onSuccess: (r) => {
+      const disposition = r.headers['content-disposition'] as string | undefined
+      const utf8 = disposition?.match(/filename\*=UTF-8''([^;]+)/i)
+      const filename = utf8 ? decodeURIComponent(utf8[1].trim()) : `Ficha - ${member?.fullName ?? 'membro'}.pdf`
+      const url = URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }))
+      const a = document.createElement('a'); a.href = url; a.download = filename; a.click()
+      URL.revokeObjectURL(url)
+      toast.success('Ficha gerada!')
+    },
+    onError: () => toast.error('Erro ao gerar ficha PDF'),
+  })
 
   const inviteMutation = useMutation({
     mutationFn: (email?: string) => api.post(`/members/${id}/invite`, { email: email || undefined }).then((r) => r.data),
@@ -209,16 +224,23 @@ export default function MemberDetail() {
             <Badge variant={statusColors[member.status] as any}>{getMemberStatusLabel(member.status)}</Badge>
           </div>
         </div>
-        {isAdmin && (
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <Button size="sm" variant="secondary" onClick={openEditModal}>
-              <Edit2 size={14} /> Editar
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {canExportProfile && (
+            <Button size="sm" variant="secondary" onClick={() => profileMutation.mutate()} loading={profileMutation.isPending} title="Exportar ficha PDF">
+              <FileDown size={14} /> Ficha PDF
             </Button>
-            <Button size="sm" variant="danger" onClick={() => setDeleteConfirm(true)}>
-              <Trash2 size={14} />
-            </Button>
-          </div>
-        )}
+          )}
+          {isAdmin && (
+            <>
+              <Button size="sm" variant="secondary" onClick={openEditModal}>
+                <Edit2 size={14} /> Editar
+              </Button>
+              <Button size="sm" variant="danger" onClick={() => setDeleteConfirm(true)}>
+                <Trash2 size={14} />
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -2,7 +2,7 @@ import { Router, Response } from 'express'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { authenticate, AuthRequest } from '../middleware/auth'
-import { generateRaidPDF, generateMemberCertificate, generateAnnualReport } from '../services/pdf'
+import { generateRaidPDF, generateMemberCertificate, generateAnnualReport, generateMemberProfilePDF, generateAllMembersProfilesPDF } from '../services/pdf'
 import { generateProgramImage, generateProgramPDF } from '../services/programImage'
 import { format } from 'date-fns'
 
@@ -137,6 +137,64 @@ router.post('/members/:memberId/certificate', async (req: AuthRequest, res: Resp
   const name = clean(member.nickname ?? member.fullName)
   const filename = `Certificado - ${name} - ${year}.pdf`
 
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`)
+  return res.send(pdf)
+})
+
+// POST /api/pdf/members-all — fichas de todos os membros (ADMIN / APP_ADMIN)
+router.post('/members-all', async (req: AuthRequest, res: Response) => {
+  const role = req.user!.role
+  if (role !== 'ADMIN' && role !== 'APP_ADMIN') return res.status(403).json({ error: 'Sem permissão' })
+  const clubId = req.user!.clubId
+
+  const [club, members] = await Promise.all([
+    prisma.club.findUnique({ where: { id: clubId } }),
+    prisma.member.findMany({
+      where: { clubId },
+      orderBy: [{ status: 'asc' }, { fullName: 'asc' }],
+      include: {
+        vehicles:  { orderBy: { createdAt: 'asc' } },
+        positions: { orderBy: { startDate: 'desc' } },
+        quotas:    { orderBy: { year: 'desc' }, take: 1 },
+      },
+    }),
+  ])
+  if (!club) return res.status(404).json({ error: 'Clube não encontrado' })
+  if (!members.length) return res.status(404).json({ error: 'Sem membros para exportar' })
+
+  const pdf = await generateAllMembersProfilesPDF(members, club)
+
+  const clean = (s: string) => s.replace(/[<>:"/\\|?*]/g, '').trim()
+  const filename = `Fichas de Membros - ${clean(club.name)}.pdf`
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`)
+  return res.send(pdf)
+})
+
+// POST /api/pdf/members/:memberId/profile — ficha de um membro (ADMIN / APP_ADMIN)
+router.post('/members/:memberId/profile', async (req: AuthRequest, res: Response) => {
+  const role = req.user!.role
+  if (role !== 'ADMIN' && role !== 'APP_ADMIN') return res.status(403).json({ error: 'Sem permissão' })
+
+  const member = await prisma.member.findFirst({
+    where: { id: req.params.memberId, clubId: req.user!.clubId },
+    include: {
+      vehicles:  { orderBy: { createdAt: 'asc' } },
+      positions: { orderBy: { startDate: 'desc' } },
+      quotas:    { orderBy: { year: 'desc' }, take: 1 },
+    },
+  })
+  if (!member) return res.status(404).json({ error: 'Membro não encontrado' })
+
+  const club = await prisma.club.findUnique({ where: { id: req.user!.clubId } })
+  if (!club) return res.status(404).json({ error: 'Clube não encontrado' })
+
+  const pdf = await generateMemberProfilePDF(member, club)
+
+  const clean = (s: string) => s.replace(/[<>:"/\\|?*]/g, '').trim()
+  const name = clean(member.nickname ?? member.fullName)
+  const filename = `Ficha - ${name}.pdf`
   res.setHeader('Content-Type', 'application/pdf')
   res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`)
   return res.send(pdf)

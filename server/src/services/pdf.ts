@@ -958,3 +958,235 @@ ${hasFinance ? `
 function getRaidStatusLabel(s: string) {
   return ({ DRAFT: 'Rascunho', CONFIRMED: 'Confirmado', IN_PROGRESS: 'Em Curso', COMPLETED: 'Concluído', CANCELLED: 'Cancelado' } as Record<string, string>)[s] ?? s
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ficha de Membro
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildMemberProfileHTML(member: any, club: any, accentColor: string, resolvedLogoUrl: string | null): string {
+  const resolvedPhotoUrl = resolveImageForPuppeteer(member.photoUrl)
+  const initial = (member.nickname ?? member.fullName ?? '?').charAt(0).toUpperCase()
+  const vehicles: any[] = member.vehicles ?? []
+  const positions: any[] = member.positions ?? []
+  const quotas: any[] = member.quotas ?? []
+  const currentYear = new Date().getFullYear()
+  const currentQuota = quotas.find((q: any) => q.year === currentYear)
+
+  const fmtDate = (d: any) => d ? format(new Date(d), 'dd/MM/yyyy') : '—'
+  const fmtMonth = (d: any) => d ? format(new Date(d), "MMMM 'de' yyyy", { locale: ptBR }) : '—'
+
+  const statusMap: Record<string, string> = { ACTIVE: 'Activo', INACTIVE: 'Inactivo', SUSPENDED: 'Suspenso', GUEST: 'Convidado' }
+  const statusBg: Record<string, string> = { ACTIVE: '#dcfce7', INACTIVE: '#f1f5f9', SUSPENDED: '#fef2f2', GUEST: '#eff6ff' }
+  const statusFg: Record<string, string> = { ACTIVE: '#16a34a', INACTIVE: '#64748b', SUSPENDED: '#dc2626', GUEST: '#2563eb' }
+  const st = member.status ?? 'ACTIVE'
+
+  const vehicleTypeLabel = (t: string) => ({ TRAIL: 'Trail', ROAD: 'Estrada', CUSTOM: 'Custom', SCOOTER: 'Scooter', SUPPORT: 'Apoio', OTHER: 'Outro' }[t] ?? t)
+
+  return `
+<div class="member-page">
+
+  <!-- HEADER -->
+  <div class="header">
+    ${resolvedLogoUrl ? `<img src="${resolvedLogoUrl}" class="header-logo" alt="Logo">` : '<div style="width:54px"></div>'}
+    <div class="header-center">
+      <div class="header-club">${club.name}</div>
+      <div class="header-sub">FICHA DE MEMBRO</div>
+    </div>
+    <div style="width:54px"></div>
+  </div>
+
+  <!-- IDENTITY -->
+  <div class="identity-row">
+    <div class="photo-wrap">
+      ${resolvedPhotoUrl
+        ? `<img src="${resolvedPhotoUrl}" class="member-photo" alt="${member.fullName}">`
+        : `<div class="member-photo-placeholder">${initial}</div>`}
+    </div>
+    <div class="identity-info">
+      <div class="member-name">${member.fullName}</div>
+      ${member.nickname ? `<div class="member-nickname">"${member.nickname}"</div>` : ''}
+      <div class="identity-meta">
+        ${member.memberNumber ? `<span class="meta-chip">Nº&nbsp;${member.memberNumber}</span>` : ''}
+        <span class="meta-chip" style="background:${statusBg[st]};color:${statusFg[st]}">${statusMap[st] ?? st}</span>
+        ${member.joinedAt ? `<span class="meta-chip">Membro desde ${fmtMonth(member.joinedAt)}</span>` : ''}
+      </div>
+    </div>
+  </div>
+
+  <!-- INFO GRID -->
+  <div class="section-title">Dados Pessoais</div>
+  <div class="info-grid">
+    <div class="info-item"><span class="info-label">Data de Nascimento</span><span class="info-value">${fmtDate(member.birthDate)}</span></div>
+    <div class="info-item"><span class="info-label">Nº BI / Passaporte</span><span class="info-value">${member.biNumber ?? '—'}</span></div>
+    <div class="info-item"><span class="info-label">Grupo Sanguíneo</span><span class="info-value">${member.bloodType ?? '—'}</span></div>
+    <div class="info-item"><span class="info-label">Telefone</span><span class="info-value">${member.phone ?? '—'}</span></div>
+    <div class="info-item col-span-2"><span class="info-label">Morada</span><span class="info-value">${member.address ?? '—'}</span></div>
+  </div>
+
+  <!-- EMERGENCY + LICENSE -->
+  <div class="two-cols">
+    <div>
+      <div class="section-title">Contacto de Emergência</div>
+      <div class="info-grid" style="grid-template-columns:1fr">
+        <div class="info-item"><span class="info-label">Nome</span><span class="info-value">${member.emergencyContact ?? '—'}</span></div>
+        <div class="info-item"><span class="info-label">Telefone</span><span class="info-value">${member.emergencyPhone ?? '—'}</span></div>
+      </div>
+    </div>
+    <div>
+      <div class="section-title">Carta de Condução</div>
+      <div class="info-grid" style="grid-template-columns:1fr">
+        <div class="info-item"><span class="info-label">Nº Licença</span><span class="info-value">${member.licenseNumber ?? '—'}</span></div>
+        <div class="info-item"><span class="info-label">Validade</span><span class="info-value">${fmtDate(member.licenseExpiresAt)}</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VEHICLES -->
+  ${vehicles.length > 0 ? `
+  <div class="section-title">Motas / Veículos</div>
+  <table>
+    <thead><tr><th>Marca</th><th>Modelo</th><th>Tipo</th><th>Ano</th><th>Matrícula</th><th>Cilindrada</th></tr></thead>
+    <tbody>
+      ${vehicles.map((v: any) => `
+      <tr>
+        <td>${v.brand}</td>
+        <td>${v.model}</td>
+        <td>${vehicleTypeLabel(v.type)}</td>
+        <td>${v.year ?? '—'}</td>
+        <td>${v.plate ?? '—'}</td>
+        <td>${v.displacement ? `${v.displacement} cc` : '—'}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>` : ''}
+
+  <!-- POSITIONS -->
+  ${positions.length > 0 ? `
+  <div class="section-title">Cargos no Clube</div>
+  <table>
+    <thead><tr><th>Cargo</th><th>Início</th><th>Fim</th><th>Estado</th></tr></thead>
+    <tbody>
+      ${positions.map((p: any) => `
+      <tr>
+        <td><strong>${p.title}</strong></td>
+        <td>${fmtDate(p.startDate)}</td>
+        <td>${p.endDate ? fmtDate(p.endDate) : '—'}</td>
+        <td>${p.isCurrent ? '<span style="color:#16a34a;font-weight:700">Actual</span>' : 'Anterior'}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>` : ''}
+
+  <!-- QUOTA -->
+  ${currentQuota ? `
+  <div class="section-title">Quota ${currentYear}</div>
+  <div class="quota-row">
+    <div class="quota-box"><div class="quota-val">${currentQuota.monthsPaid ?? 0}/12</div><div class="quota-label">Meses Pagos</div></div>
+    <div class="quota-box"><div class="quota-val">${(currentQuota.paidAmount ?? 0).toLocaleString('pt-AO')} Kz</div><div class="quota-label">Valor Pago</div></div>
+    <div class="quota-box"><div class="quota-val">${Math.max(0, (currentQuota.dueAmount ?? 0) - (currentQuota.paidAmount ?? 0)).toLocaleString('pt-AO')} Kz</div><div class="quota-label">Em Dívida</div></div>
+  </div>` : ''}
+
+  <!-- NOTES -->
+  ${member.notes ? `
+  <div class="section-title">Observações</div>
+  <div class="notes-box">${member.notes}</div>` : ''}
+
+  <!-- FOOTER -->
+  <div class="member-footer">
+    <div class="footer-left">${club.name} &middot; RaidManager</div>
+    <div class="footer-right">Emitido em ${format(new Date(), "dd/MM/yyyy")}</div>
+  </div>
+
+</div>`
+}
+
+export async function generateMemberProfilePDF(member: any, club: any): Promise<Buffer> {
+  const accentColor = club.accentColor ?? '#dc2626'
+  const resolvedLogoUrl = resolveImageForPuppeteer(club.logoUrl)
+  const html = buildMemberProfilePageHTML([member], club, accentColor, resolvedLogoUrl)
+  return launchPuppeteerPDF(html)
+}
+
+export async function generateAllMembersProfilesPDF(members: any[], club: any): Promise<Buffer> {
+  const accentColor = club.accentColor ?? '#dc2626'
+  const resolvedLogoUrl = resolveImageForPuppeteer(club.logoUrl)
+  const html = buildMemberProfilePageHTML(members, club, accentColor, resolvedLogoUrl)
+  return launchPuppeteerPDF(html)
+}
+
+function buildMemberProfilePageHTML(members: any[], club: any, accentColor: string, resolvedLogoUrl: string | null): string {
+  const membersHTML = members
+    .map((m, i) => buildMemberProfileHTML(m, club, accentColor, resolvedLogoUrl) + (i < members.length - 1 ? '<div class="page-break"></div>' : ''))
+    .join('')
+
+  return `<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, 'Helvetica Neue', Helvetica, sans-serif; font-size: 9.5pt; color: #1a1a1a; background: white; }
+
+  .page-break { page-break-after: always; }
+
+  .member-page { padding: 10mm 16mm 8mm 16mm; position: relative; min-height: 257mm; display: flex; flex-direction: column; gap: 10px; }
+
+  .header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; border-bottom: 3px solid ${accentColor}; margin-bottom: 14px; }
+  .header-logo { height: 48px; object-fit: contain; }
+  .header-center { text-align: center; }
+  .header-club { font-size: 15pt; font-weight: 900; color: ${accentColor}; letter-spacing: 0.5px; text-transform: uppercase; }
+  .header-sub { font-size: 8pt; color: #888; letter-spacing: 2px; text-transform: uppercase; margin-top: 2px; }
+
+  .identity-row { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 2px; }
+  .photo-wrap { flex-shrink: 0; }
+  .member-photo { width: 80px; height: 80px; border-radius: 6px; object-fit: cover; border: 2px solid ${accentColor}; }
+  .member-photo-placeholder { width: 80px; height: 80px; border-radius: 6px; background: ${accentColor}18; border: 2px solid ${accentColor}44; display: flex; align-items: center; justify-content: center; font-size: 28pt; font-weight: 900; color: ${accentColor}; }
+  .identity-info { flex: 1; }
+  .member-name { font-size: 16pt; font-weight: 900; color: #111; line-height: 1.1; }
+  .member-nickname { font-size: 11pt; color: ${accentColor}; font-style: italic; margin-top: 2px; }
+  .identity-meta { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+  .meta-chip { font-size: 7.5pt; padding: 2px 8px; border-radius: 20px; background: #f1f5f9; color: #475569; font-weight: 600; }
+
+  .section-title { font-size: 8pt; font-weight: 700; color: white; background: ${accentColor}; padding: 3px 10px; border-radius: 3px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; margin-bottom: 2px; }
+  .info-item { display: flex; gap: 6px; font-size: 8.5pt; align-items: baseline; }
+  .info-label { color: #888; min-width: 110px; flex-shrink: 0; }
+  .info-value { font-weight: 600; color: #1a1a1a; }
+  .col-span-2 { grid-column: span 2; }
+
+  .two-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 8pt; margin-bottom: 2px; }
+  th { background: ${accentColor}; color: white; font-weight: 700; padding: 4px 8px; text-align: left; }
+  td { padding: 4px 8px; border-bottom: 1px solid #f0f0f0; }
+  tr:last-child td { border-bottom: none; }
+  tr:nth-child(even) td { background: #fafafa; }
+
+  .quota-row { display: flex; gap: 10px; margin-bottom: 2px; }
+  .quota-box { flex: 1; border: 1px solid ${accentColor}33; border-top: 3px solid ${accentColor}; border-radius: 4px; padding: 8px; text-align: center; }
+  .quota-val { font-size: 13pt; font-weight: 900; color: ${accentColor}; line-height: 1; }
+  .quota-label { font-size: 7pt; color: #999; margin-top: 3px; text-transform: uppercase; letter-spacing: 0.3px; }
+
+  .notes-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 8px 10px; font-size: 8.5pt; color: #444; line-height: 1.5; }
+
+  .member-footer { margin-top: auto; padding-top: 8px; border-top: 1px solid #e8e8e8; display: flex; justify-content: space-between; font-size: 7pt; color: #aaa; }
+</style>
+</head>
+<body>
+${membersHTML}
+</body>
+</html>`
+}
+
+async function launchPuppeteerPDF(html: string): Promise<Buffer> {
+  const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] })
+  const page = await browser.newPage()
+  await page.setContent(html, { waitUntil: 'domcontentloaded' })
+  const pdf = await page.pdf({
+    format: 'A4',
+    printBackground: true,
+    displayHeaderFooter: false,
+    margin: { top: '0', right: '0', bottom: '0', left: '0' },
+  })
+  await browser.close()
+  return Buffer.from(pdf)
+}
