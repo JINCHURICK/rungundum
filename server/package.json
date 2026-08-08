@@ -19,6 +19,7 @@
     "@types/compression": "^1.8.1",
     "@types/nodemailer": "^8.0.1",
     "@types/web-push": "^3.6.4",
+    "axios": "^1.7.2",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.3.0",
     "compression": "^1.8.1",
