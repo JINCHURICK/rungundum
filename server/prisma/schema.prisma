@@ -175,6 +175,7 @@ model Vehicle {
   member       Member        @relation(fields: [memberId], references: [id], onDelete: Cascade)
   participations Participant[]
 
+  @@index([memberId])
   @@map("vehicles")
 }
 
@@ -206,6 +207,7 @@ model Raid {
   contingencyPlan   ContingencyPlan?
   photos            RaidPhoto[]
 
+  @@index([clubId])
   @@map("raids")
 }
 
@@ -567,6 +569,7 @@ model DisciplinaryProcess {
   fines       Fine[]
   suspensions Suspension[]
 
+  @@index([clubId])
   @@map("disciplinary_processes")
 }
 
@@ -588,6 +591,7 @@ model Suspension {
   member  Member               @relation(fields: [memberId], references: [id], onDelete: Cascade)
   process DisciplinaryProcess? @relation(fields: [processId], references: [id])
 
+  @@index([clubId])
   @@map("suspensions")
 }
 
@@ -609,6 +613,8 @@ model Fine {
   member  Member               @relation(fields: [memberId], references: [id], onDelete: Cascade)
   process DisciplinaryProcess? @relation(fields: [processId], references: [id])
 
+  @@index([clubId])
+  @@index([memberId])
   @@map("fines")
 }
 
@@ -650,6 +656,7 @@ model Transaction {
   club   Club    @relation(fields: [clubId], references: [id], onDelete: Cascade)
   member Member? @relation(fields: [memberId], references: [id])
 
+  @@index([clubId])
   @@map("transactions")
 }
 
@@ -670,6 +677,7 @@ model Announcement {
 
   club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
 
+  @@index([clubId])
   @@map("announcements")
 }
 
@@ -722,5 +730,7 @@ model ClubPosition {
   club   Club   @relation(fields: [clubId], references: [id], onDelete: Cascade)
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
+  @@index([clubId])
+  @@index([memberId])
   @@map("club_positions")
 }

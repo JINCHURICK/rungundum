@@ -9,26 +9,29 @@ router.use(authenticate)
 router.get('/', async (req: AuthRequest, res: Response) => {
   const clubId = req.user!.clubId
 
-  const [raids, members, participants] = await Promise.all([
+  const now = new Date()
+
+  const [raids, memberCounts, topParticipantsRaw] = await Promise.all([
     prisma.raid.findMany({
       where: { clubId },
-      select: {
-        id: true, status: true, date: true, estimatedKm: true,
-        _count: { select: { participants: true } },
-      },
+      select: { id: true, status: true, date: true, estimatedKm: true },
     }),
-    prisma.member.findMany({
+    prisma.member.groupBy({
+      by: ['status'],
       where: { clubId },
-      select: { id: true, status: true, fullName: true, nickname: true, photoUrl: true },
+      _count: true,
     }),
-    prisma.participant.findMany({
-      where: { raid: { clubId } },
-      select: {
-        memberId: true, status: true,
-        member: { select: { fullName: true, nickname: true } },
-      },
+    prisma.participant.groupBy({
+      by: ['memberId'],
+      where: { raid: { clubId }, status: 'CONFIRMED' },
+      _count: { memberId: true },
+      orderBy: { _count: { memberId: 'desc' } },
+      take: 5,
     }),
   ])
+
+  const totalMembers = memberCounts.reduce((s, g) => s + g._count, 0)
+  const activeMembers = memberCounts.find((g) => g.status === 'ACTIVE')?._count ?? 0
 
   const totalRaids = raids.length
   const completedRaids = raids.filter((r) => r.status === 'COMPLETED').length
@@ -37,10 +40,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     .filter((r) => r.status === 'COMPLETED' && r.estimatedKm)
     .reduce((sum, r) => sum + (r.estimatedKm ?? 0), 0)
 
-  const activeMembers = members.filter((m) => m.status === 'ACTIVE').length
-
   // Raids by month (last 12 months)
-  const now = new Date()
   const months: { month: string; count: number }[] = []
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
@@ -52,29 +52,25 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     months.push({ month: label, count })
   }
 
-  // Top participants (confirmed participations)
-  const memberCounts: Record<string, { name: string; count: number }> = {}
-  for (const p of participants) {
-    if (p.status === 'CONFIRMED') {
-      if (!memberCounts[p.memberId]) {
-        memberCounts[p.memberId] = {
-          name: p.member.nickname ?? p.member.fullName,
-          count: 0,
-        }
-      }
-      memberCounts[p.memberId].count++
-    }
-  }
-  const topParticipants = Object.values(memberCounts)
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5)
+  // Resolve top participant names
+  const topMemberIds = topParticipantsRaw.map((p) => p.memberId)
+  const topMembers = topMemberIds.length > 0
+    ? await prisma.member.findMany({
+        where: { id: { in: topMemberIds } },
+        select: { id: true, fullName: true, nickname: true },
+      })
+    : []
+  const topParticipants = topParticipantsRaw.map((p) => {
+    const m = topMembers.find((tm) => tm.id === p.memberId)
+    return { name: m?.nickname ?? m?.fullName ?? '?', count: p._count.memberId }
+  })
 
   return res.json({
     totalRaids,
     completedRaids,
     upcomingRaids,
     totalKm: Math.round(totalKm),
-    totalMembers: members.length,
+    totalMembers,
     activeMembers,
     raidsByMonth: months,
     topParticipants,
