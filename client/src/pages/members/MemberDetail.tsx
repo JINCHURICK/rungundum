@@ -54,7 +54,7 @@ export default function MemberDetail() {
   const photoMutation = useMutation({
     mutationFn: (file: File) => {
       const fd = new FormData(); fd.append('photo', file)
-      return api.post(`/members/${id}/photo`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      return api.post(`/members/${id}/photo`, fd)
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['member', id] }); toast.success('Foto actualizada!') },
     onError: () => toast.error('Erro ao fazer upload da foto'),
@@ -138,7 +138,7 @@ export default function MemberDetail() {
   const vehiclePhotoMutation = useMutation({
     mutationFn: ({ vehicleId, file }: { vehicleId: string; file: File }) => {
       const fd = new FormData(); fd.append('photo', file)
-      return api.post(`/members/${id}/vehicles/${vehicleId}/photo`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      return api.post(`/members/${id}/vehicles/${vehicleId}/photo`, fd)
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['member', id] }); toast.success('Foto do veículo actualizada!') },
     onError: () => toast.error('Erro ao fazer upload da foto'),

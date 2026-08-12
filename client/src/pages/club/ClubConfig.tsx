@@ -93,7 +93,7 @@ export default function ClubConfig() {
   const logoMutation = useMutation({
     mutationFn: (file: File) => {
       const fd = new FormData(); fd.append('logo', file)
-      return api.post('/clubs/me/logo', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then((r) => r.data)
+      return api.post('/clubs/me/logo', fd).then((r) => r.data)
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['club'] })
@@ -103,7 +103,10 @@ export default function ClubConfig() {
       }
       toast.success('Logo actualizado!')
     },
-    onError: () => toast.error('Erro ao fazer upload do logo'),
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error ?? 'Erro ao fazer upload do logo'
+      toast.error(msg)
+    },
   })
 
   const addContactMutation = useMutation({
@@ -139,7 +142,7 @@ export default function ClubConfig() {
   const signalImageMutation = useMutation({
     mutationFn: ({ id, file }: { id: string; file: File }) => {
       const fd = new FormData(); fd.append('image', file)
-      return api.post(`/clubs/me/hand-signals/${id}/image`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      return api.post(`/clubs/me/hand-signals/${id}/image`, fd)
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['hand-signals'] }); toast.success('Imagem actualizada!') },
     onError: () => toast.error('Erro ao fazer upload da imagem'),

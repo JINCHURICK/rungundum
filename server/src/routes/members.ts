@@ -1,4 +1,4 @@
-import { Router, Response } from 'express'
+import { Router, Response, NextFunction } from 'express'
 import { z } from 'zod'
 import { randomBytes } from 'crypto'
 import { prisma } from '../lib/prisma'
@@ -241,14 +241,15 @@ router.patch('/:id', requirePermission('MEMBERS_WRITE'), async (req: AuthRequest
 })
 
 // POST /api/members/:id/photo
-router.post('/:id/photo', requirePermission('MEMBERS_WRITE'), upload.single('photo'), async (req: AuthRequest, res: Response) => {
-  const member = await prisma.member.findFirst({ where: { id: req.params.id, clubId: req.user!.clubId } })
-  if (!member) return res.status(404).json({ error: 'Membro não encontrado' })
-  if (!req.file) return res.status(400).json({ error: 'Ficheiro em falta' })
-
-  const url = await uploadToCloudinary(req.file.buffer, `clubs/${req.user!.clubId}/members/${req.params.id}`)
-  const updated = await prisma.member.update({ where: { id: req.params.id }, data: { photoUrl: url } })
-  return res.json({ photoUrl: updated.photoUrl })
+router.post('/:id/photo', requirePermission('MEMBERS_WRITE'), upload.single('photo'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const member = await prisma.member.findFirst({ where: { id: req.params.id, clubId: req.user!.clubId } })
+    if (!member) return res.status(404).json({ error: 'Membro não encontrado' })
+    if (!req.file) return res.status(400).json({ error: 'Ficheiro em falta' })
+    const url = await uploadToCloudinary(req.file.buffer, `clubs/${req.user!.clubId}/members/${req.params.id}`)
+    const updated = await prisma.member.update({ where: { id: req.params.id }, data: { photoUrl: url } })
+    return res.json({ photoUrl: updated.photoUrl })
+  } catch (err) { next(err) }
 })
 
 // POST /api/members/:id/invite — gera link de convite para o membro criar conta
@@ -348,15 +349,17 @@ router.patch('/:memberId/vehicles/:vehicleId', async (req: AuthRequest, res: Res
 })
 
 // POST /api/members/:memberId/vehicles/:vehicleId/photo
-router.post('/:memberId/vehicles/:vehicleId/photo', upload.single('photo'), async (req: AuthRequest, res: Response) => {
-  const member = await prisma.member.findFirst({ where: { id: req.params.memberId, clubId: req.user!.clubId } })
-  if (!member) return res.status(404).json({ error: 'Membro não encontrado' })
-  const vehicle = await prisma.vehicle.findFirst({ where: { id: req.params.vehicleId, memberId: req.params.memberId } })
-  if (!vehicle) return res.status(404).json({ error: 'Veículo não encontrado' })
-  if (!req.file) return res.status(400).json({ error: 'Ficheiro em falta' })
-  const url = await uploadToCloudinary(req.file.buffer, `clubs/${req.user!.clubId}/vehicles/${req.params.vehicleId}`)
-  const updated = await prisma.vehicle.update({ where: { id: vehicle.id }, data: { photoUrl: url } })
-  return res.json({ photoUrl: updated.photoUrl })
+router.post('/:memberId/vehicles/:vehicleId/photo', upload.single('photo'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const member = await prisma.member.findFirst({ where: { id: req.params.memberId, clubId: req.user!.clubId } })
+    if (!member) return res.status(404).json({ error: 'Membro não encontrado' })
+    const vehicle = await prisma.vehicle.findFirst({ where: { id: req.params.vehicleId, memberId: req.params.memberId } })
+    if (!vehicle) return res.status(404).json({ error: 'Veículo não encontrado' })
+    if (!req.file) return res.status(400).json({ error: 'Ficheiro em falta' })
+    const url = await uploadToCloudinary(req.file.buffer, `clubs/${req.user!.clubId}/vehicles/${req.params.vehicleId}`)
+    const updated = await prisma.vehicle.update({ where: { id: vehicle.id }, data: { photoUrl: url } })
+    return res.json({ photoUrl: updated.photoUrl })
+  } catch (err) { next(err) }
 })
 
 // DELETE /api/members/:memberId/vehicles/:vehicleId

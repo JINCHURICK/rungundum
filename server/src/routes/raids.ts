@@ -1,4 +1,4 @@
-import { Router, Response } from 'express'
+import { Router, Response, NextFunction } from 'express'
 import { z } from 'zod'
 import { randomBytes } from 'crypto'
 import multer from 'multer'
@@ -358,17 +358,18 @@ router.post('/:id/duplicate', requireRole('ADMIN', 'CAPTAIN'), async (req: AuthR
 })
 
 // POST /api/raids/:id/photos — upload de foto
-router.post('/:id/photos', upload.single('photo'), async (req: AuthRequest, res: Response) => {
-  const raid = await prisma.raid.findFirst({ where: { id: req.params.id, clubId: req.user!.clubId } })
-  if (!raid) return res.status(404).json({ error: 'Raid não encontrado' })
-  if (!req.file) return res.status(400).json({ error: 'Nenhum ficheiro enviado' })
-
-  const caption = typeof req.body.caption === 'string' ? req.body.caption : undefined
-  const url = await uploadToCloudinary(req.file.buffer, `clubs/${req.user!.clubId}/raids/${raid.id}/photos`)
-  const photo = await prisma.raidPhoto.create({
-    data: { raidId: raid.id, url, caption, uploadedById: req.user!.userId },
-  })
-  return res.status(201).json(photo)
+router.post('/:id/photos', upload.single('photo'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const raid = await prisma.raid.findFirst({ where: { id: req.params.id, clubId: req.user!.clubId } })
+    if (!raid) return res.status(404).json({ error: 'Raid não encontrado' })
+    if (!req.file) return res.status(400).json({ error: 'Nenhum ficheiro enviado' })
+    const caption = typeof req.body.caption === 'string' ? req.body.caption : undefined
+    const url = await uploadToCloudinary(req.file.buffer, `clubs/${req.user!.clubId}/raids/${raid.id}/photos`)
+    const photo = await prisma.raidPhoto.create({
+      data: { raidId: raid.id, url, caption, uploadedById: req.user!.userId },
+    })
+    return res.status(201).json(photo)
+  } catch (err) { next(err) }
 })
 
 // DELETE /api/raids/:id/photos/:photoId

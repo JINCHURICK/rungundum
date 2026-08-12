@@ -130,7 +130,7 @@ export default function RaidDetail() {
     mutationFn: (file: File) => {
       const fd = new FormData()
       fd.append('photo', file)
-      return api.post(`/raids/${id}/photos`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      return api.post(`/raids/${id}/photos`, fd)
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['raid', id] }); toast.success('Foto adicionada!') },
     onError: () => toast.error('Erro ao fazer upload da foto'),

@@ -97,7 +97,7 @@ export default function MyProfile() {
   const vehiclePhotoMutation = useMutation({
     mutationFn: ({ vehicleId, file }: { vehicleId: string; file: File }) => {
       const fd = new FormData(); fd.append('photo', file)
-      return api.post(`/members/${memberId}/vehicles/${vehicleId}/photo`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      return api.post(`/members/${memberId}/vehicles/${vehicleId}/photo`, fd)
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['my-profile'] }); toast.success('Foto do veículo actualizada!') },
     onError: () => toast.error('Erro ao fazer upload da foto'),
@@ -119,7 +119,7 @@ export default function MyProfile() {
   const photoMutation = useMutation({
     mutationFn: (file: File) => {
       const fd = new FormData(); fd.append('photo', file)
-      return api.post(`/members/${user!.memberId}/photo`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      return api.post(`/members/${user!.memberId}/photo`, fd)
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['my-profile'] }); toast.success('Foto actualizada!') },
     onError: () => toast.error('Erro ao fazer upload da foto'),

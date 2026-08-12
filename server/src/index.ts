@@ -2,6 +2,7 @@ import './prisma-patch' // MUST be first — patches Prisma before any Prisma co
 import './env'
 import app from './app'
 import { prisma, recreatePrismaClient } from './lib/prisma'
+import { calibrateClockOffset } from './services/cloudinary'
 
 const socketPath = process.env.LSNODE_SOCKET
 const PORT = parseInt(process.env.PORT ?? '3001', 10)
@@ -40,6 +41,7 @@ process.on('uncaughtException', (err) => {
 })
 
 prisma.$connect().catch(() => {})
+calibrateClockOffset().catch(() => {})
 
 if (socketPath) {
   app.listen(socketPath, () => {

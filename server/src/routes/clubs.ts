@@ -1,4 +1,4 @@
-import { Router, Response } from 'express'
+import { Router, Response, NextFunction } from 'express'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { authenticate, requireRole, AuthRequest } from '../middleware/auth'
@@ -57,19 +57,23 @@ router.patch('/me', requireRole('ADMIN'), async (req: AuthRequest, res: Response
 })
 
 // POST /api/clubs/me/logo
-router.post('/me/logo', requireRole('ADMIN'), upload.single('logo'), async (req: AuthRequest, res: Response) => {
-  if (!req.file) return res.status(400).json({ error: 'Ficheiro em falta' })
-  const url = await uploadToCloudinary(req.file.buffer, `clubs/${req.user!.clubId}/logo`)
-  const club = await prisma.club.update({ where: { id: req.user!.clubId }, data: { logoUrl: url } })
-  return res.json({ logoUrl: club.logoUrl })
+router.post('/me/logo', requireRole('ADMIN'), upload.single('logo'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Ficheiro em falta' })
+    const url = await uploadToCloudinary(req.file.buffer, `clubs/${req.user!.clubId}/logo`)
+    const club = await prisma.club.update({ where: { id: req.user!.clubId }, data: { logoUrl: url } })
+    return res.json({ logoUrl: club.logoUrl })
+  } catch (err) { next(err) }
 })
 
 // POST /api/clubs/me/second-logo
-router.post('/me/second-logo', requireRole('ADMIN'), upload.single('logo'), async (req: AuthRequest, res: Response) => {
-  if (!req.file) return res.status(400).json({ error: 'Ficheiro em falta' })
-  const url = await uploadToCloudinary(req.file.buffer, `clubs/${req.user!.clubId}/second-logo`)
-  const club = await prisma.club.update({ where: { id: req.user!.clubId }, data: { secondLogoUrl: url } })
-  return res.json({ secondLogoUrl: club.secondLogoUrl })
+router.post('/me/second-logo', requireRole('ADMIN'), upload.single('logo'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Ficheiro em falta' })
+    const url = await uploadToCloudinary(req.file.buffer, `clubs/${req.user!.clubId}/second-logo`)
+    const club = await prisma.club.update({ where: { id: req.user!.clubId }, data: { secondLogoUrl: url } })
+    return res.json({ secondLogoUrl: club.secondLogoUrl })
+  } catch (err) { next(err) }
 })
 
 // GET /api/clubs/me/emergency-contacts
@@ -162,13 +166,15 @@ router.delete('/me/hand-signals/:id', requireRole('ADMIN', 'CAPTAIN'), async (re
 })
 
 // POST /api/clubs/me/hand-signals/:id/image
-router.post('/me/hand-signals/:id/image', requireRole('ADMIN', 'CAPTAIN'), upload.single('image'), async (req: AuthRequest, res: Response) => {
-  if (!req.file) return res.status(400).json({ error: 'Ficheiro em falta' })
-  const signal = await prisma.handSignal.findFirst({ where: { id: req.params.id, clubId: req.user!.clubId } })
-  if (!signal) return res.status(404).json({ error: 'Sinal não encontrado' })
-  const url = await uploadToCloudinary(req.file.buffer, `clubs/${req.user!.clubId}/hand-signals/${req.params.id}`)
-  const updated = await prisma.handSignal.update({ where: { id: req.params.id }, data: { imageUrl: url } })
-  return res.json({ imageUrl: updated.imageUrl })
+router.post('/me/hand-signals/:id/image', requireRole('ADMIN', 'CAPTAIN'), upload.single('image'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Ficheiro em falta' })
+    const signal = await prisma.handSignal.findFirst({ where: { id: req.params.id, clubId: req.user!.clubId } })
+    if (!signal) return res.status(404).json({ error: 'Sinal não encontrado' })
+    const url = await uploadToCloudinary(req.file.buffer, `clubs/${req.user!.clubId}/hand-signals/${req.params.id}`)
+    const updated = await prisma.handSignal.update({ where: { id: req.params.id }, data: { imageUrl: url } })
+    return res.json({ imageUrl: updated.imageUrl })
+  } catch (err) { next(err) }
 })
 
 // PUT /api/clubs/me/hand-signals/reorder — actualizar ordem de vários sinais

@@ -73,6 +73,33 @@ export function resolveImageForPuppeteer(url: string | null | undefined): string
   return `data:${mimeType};base64,${buffer.toString('base64')}`
 }
 
+// Offset entre o relógio do sistema e o UTC real.
+// O hypervisor KVM do Hetzner pode manter o CMOS com offset fixo;
+// calculamos uma vez no arranque e aplicamos a todos os uploads.
+let clockOffsetMs = 0
+
+export async function calibrateClockOffset(): Promise<void> {
+  try {
+    const before = Date.now()
+    const res = await fetch('https://worldtimeapi.org/api/timezone/UTC', {
+      signal: AbortSignal.timeout(5000),
+    })
+    const data = await res.json() as { utc_datetime: string }
+    const realUtc = new Date(data.utc_datetime).getTime()
+    const after = Date.now()
+    clockOffsetMs = realUtc - Math.round((before + after) / 2)
+    if (Math.abs(clockOffsetMs) > 5000) {
+      console.warn(`[cloudinary] clock offset detectado: ${Math.round(clockOffsetMs / 1000)}s — a corrigir timestamps`)
+    }
+  } catch {
+    console.warn('[cloudinary] calibração do relógio falhou — a usar relógio do sistema')
+  }
+}
+
+function getRealTimestampSeconds(): number {
+  return Math.round((Date.now() + clockOffsetMs) / 1000)
+}
+
 export async function uploadToCloudinary(buffer: Buffer, folder: string): Promise<string> {
   // Validar magic bytes antes de qualquer upload
   const detectedMime = validateImageBuffer(buffer)
@@ -83,9 +110,14 @@ export async function uploadToCloudinary(buffer: Buffer, folder: string): Promis
     return saveLocally(buffer, folder, detectedMime)
   }
 
-  return new Promise((resolve, reject) => {
+  const uploadPromise = new Promise<string>((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
-      { folder, resource_type: 'image', transformation: [{ quality: 'auto', fetch_format: 'auto' }] },
+      {
+        folder,
+        resource_type: 'image',
+        transformation: [{ quality: 'auto', fetch_format: 'auto' }],
+        timestamp: getRealTimestampSeconds(),
+      },
       (error, result) => {
         if (error) return reject(error)
         resolve(result!.secure_url)
@@ -93,4 +125,11 @@ export async function uploadToCloudinary(buffer: Buffer, folder: string): Promis
     )
     stream.end(buffer)
   })
+
+  // Timeout de 30s — evita que o browser fique pendurado se o Cloudinary não responder
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('Cloudinary upload timeout (30s)')), 30_000)
+  )
+
+  return Promise.race([uploadPromise, timeout])
 }
