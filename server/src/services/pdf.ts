@@ -414,7 +414,7 @@ ${opts.includeStatutes && club.statutesText ? `
     <div style="width:100%;display:flex;justify-content:space-between;align-items:center;
                 font-family:'Segoe UI',Arial,sans-serif;font-size:7pt;color:#aaa;
                 border-top:1px solid #e5e5e5;padding:4px 18mm 0;box-sizing:border-box;">
-      <span>${clubName} &middot; RaidManager</span>
+      <span>${clubName} &middot; Rungundum</span>
       <span>${raid.title} &middot; ${raidDate}</span>
       <span>Pag. <span class="pageNumber"></span> / <span class="totalPages"></span></span>
     </div>`
@@ -740,7 +740,7 @@ export async function generateMemberCertificate(member: any, club: any, year: nu
 
 </div>
 
-<div class="watermark">${club.acronym ?? club.name} · RaidManager · ${year}</div>
+<div class="watermark">${club.acronym ?? club.name} · Rungundum · ${year}</div>
 </body>
 </html>`
 
@@ -1111,7 +1111,7 @@ function buildMemberProfileHTML(member: any, club: any, accentColor: string, res
 
   <!-- FOOTER -->
   <div class="member-footer">
-    <div class="footer-left">${club.name} &middot; RaidManager</div>
+    <div class="footer-left">${club.name} &middot; Rungundum</div>
     <div class="footer-right">Emitido em ${format(new Date(), "dd/MM/yyyy")}</div>
   </div>
 
