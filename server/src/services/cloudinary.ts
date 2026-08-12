@@ -52,9 +52,35 @@ function saveLocally(buffer: Buffer, folder: string, detectedMime: string): stri
   return `/uploads/${safeFolder}/${filename}`
 }
 
+// Cache de imagens para PDFs: evita re-descarregar a mesma foto em gerações consecutivas
+const _pdfImageCache = new Map<string, { data: string; expires: number }>()
+const _CACHE_TTL = 15 * 60 * 1000 // 15 minutos
+const _CACHE_MAX = 100
+
+function _getCached(url: string): string | null {
+  const entry = _pdfImageCache.get(url)
+  if (!entry) return null
+  if (Date.now() > entry.expires) { _pdfImageCache.delete(url); return null }
+  return entry.data
+}
+
+function _setCached(url: string, data: string): void {
+  if (_pdfImageCache.size >= _CACHE_MAX) {
+    const oldest = _pdfImageCache.keys().next().value
+    if (oldest) _pdfImageCache.delete(oldest)
+  }
+  _pdfImageCache.set(url, { data, expires: Date.now() + _CACHE_TTL })
+}
+
+// Para URLs do Cloudinary, pede versão reduzida (300×300) que descarrega muito mais rápido
+function _cloudinaryThumb(url: string): string {
+  if (!url.includes('res.cloudinary.com')) return url
+  return url.replace('/upload/', '/upload/w_300,h_300,c_fill,f_jpg,q_75/')
+}
+
 /**
  * Converte qualquer URL de imagem para data URI que o Puppeteer consegue renderizar.
- * URLs externas (Cloudinary, etc.) são descarregadas pelo Node.js.
+ * URLs externas (Cloudinary) são redimensionadas e cacheadas em memória.
  * URLs locais são lidas do disco.
  * Protegido contra path traversal.
  */
@@ -62,13 +88,19 @@ export async function resolveImageForPuppeteer(url: string | null | undefined): 
   if (!url) return null
 
   if (url.startsWith('http')) {
+    const cached = _getCached(url)
+    if (cached) return cached
+
     try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(10_000) })
+      const fetchUrl = _cloudinaryThumb(url)
+      const res = await fetch(fetchUrl, { signal: AbortSignal.timeout(10_000) })
       if (!res.ok) return null
       const buffer = Buffer.from(await res.arrayBuffer())
       const ct = res.headers.get('content-type') ?? 'image/jpeg'
       const mime = ct.split(';')[0].trim()
-      return `data:${mime};base64,${buffer.toString('base64')}`
+      const dataUri = `data:${mime};base64,${buffer.toString('base64')}`
+      _setCached(url, dataUri)
+      return dataUri
     } catch {
       return null
     }
