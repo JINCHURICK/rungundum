@@ -69,7 +69,7 @@ const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   fullName: z.string().min(2),
-  role: z.enum(['ADMIN', 'APP_ADMIN']).default('ADMIN'),
+  role: z.literal('ADMIN').default('ADMIN'),
 })
 
 const loginSchema = z.object({
@@ -149,7 +149,7 @@ router.post('/register', async (req: Request, res: Response) => {
       },
     })
     const user = await prisma.user.create({
-      data: { clubId: club.id, email: data.email, passwordHash, role: data.role, platformAdmin: data.role === 'APP_ADMIN', verificationToken, verificationExpires },
+      data: { clubId: club.id, email: data.email, passwordHash, role: data.role, verificationToken, verificationExpires },
     })
     const member = await prisma.member.create({
       data: { clubId: club.id, userId: user.id, fullName: data.fullName, status: 'ACTIVE' },

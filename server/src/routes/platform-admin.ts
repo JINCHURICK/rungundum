@@ -15,28 +15,6 @@ function clubTrialDaysLeft(trialEndsAt: Date | null) {
   return Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / 86400000))
 }
 
-const DEFAULT_PLAN_CONFIGS = [
-  {
-    key: 'PRO', name: 'Motard', description: 'Plataforma completa de gestão para moto clubes angolanos',
-    currency: 'Kz', contactOnly: false, highlight: true,
-    maxMembers: null, maxRaidsPerMonth: null, emailNotifications: true, leaguesEnabled: false,
-    active: true, displayOrder: 0,
-    features: [
-      'Membros ilimitados',
-      'Raids ilimitados',
-      'Gestão de quotas e pagamentos',
-      'Processos disciplinares e suspensões',
-      'Envio de SMS para membros',
-      'Notificações por email',
-      'Plano de contingência por raid',
-      'Estatísticas e exportação CSV',
-    ],
-    pricingTiers: [
-      { months: 1,  pricePerMonth: 12000, totalPrice: 12000,  label: 'Mensal' },
-      { months: 12, pricePerMonth: 9500,  totalPrice: 114000, label: 'Anual'  },
-    ],
-  },
-]
 
 // Migra formato antigo para o novo (pricingTiers + features + highlight)
 function migrateLegacyConfig(c: any): any {
@@ -72,18 +50,17 @@ async function getPlanConfigs() {
   try {
     const settings = await prisma.platformSettings.upsert({
       where: { id: 'singleton' },
-      create: { id: 'singleton', planConfigs: DEFAULT_PLAN_CONFIGS },
+      create: { id: 'singleton', planConfigs: [] },
       update: {},
     })
     const raw = settings.planConfigs as any[]
-    const configs = raw.length ? raw.map(migrateLegacyConfig) : DEFAULT_PLAN_CONFIGS
-    // Write to file cache so next call doesn't need Prisma
+    const configs = raw.map(migrateLegacyConfig)
     writePlanCache(configs)
     return configs
   } catch (err: any) {
     if (err?.name === 'PrismaClientRustPanicError') recreatePrismaClient()
     console.error('[plan-configs] DB read failed:', err?.message ?? err)
-    return DEFAULT_PLAN_CONFIGS
+    return []
   }
 }
 
