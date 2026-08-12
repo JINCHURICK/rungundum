@@ -53,17 +53,30 @@ function saveLocally(buffer: Buffer, folder: string, detectedMime: string): stri
 }
 
 /**
- * Converte URL local para data URI que o Puppeteer consegue renderizar.
+ * Converte qualquer URL de imagem para data URI que o Puppeteer consegue renderizar.
+ * URLs externas (Cloudinary, etc.) são descarregadas pelo Node.js.
+ * URLs locais são lidas do disco.
  * Protegido contra path traversal.
  */
-export function resolveImageForPuppeteer(url: string | null | undefined): string | null {
+export async function resolveImageForPuppeteer(url: string | null | undefined): Promise<string | null> {
   if (!url) return null
-  if (url.startsWith('http')) return url
+
+  if (url.startsWith('http')) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(10_000) })
+      if (!res.ok) return null
+      const buffer = Buffer.from(await res.arrayBuffer())
+      const ct = res.headers.get('content-type') ?? 'image/jpeg'
+      const mime = ct.split(';')[0].trim()
+      return `data:${mime};base64,${buffer.toString('base64')}`
+    } catch {
+      return null
+    }
+  }
 
   const relativePart = url.replace(/^\/uploads\//, '')
   const localPath = path.resolve(path.join(UPLOADS_DIR, relativePart))
 
-  // Prevenir path traversal — o caminho resolvido deve estar dentro de UPLOADS_DIR
   if (!localPath.startsWith(UPLOADS_DIR + path.sep)) return null
   if (!fs.existsSync(localPath)) return null
 

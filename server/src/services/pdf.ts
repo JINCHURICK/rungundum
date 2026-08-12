@@ -45,14 +45,13 @@ interface PDFOptions {
 }
 
 export async function generateRaidPDF(raid: any, club: any, options: PDFOptions = {}): Promise<Buffer> {
-  const resolvedLogoUrl = resolveImageForPuppeteer(club.logoUrl)
+  const resolvedLogoUrl = await resolveImageForPuppeteer(club.logoUrl)
   club = { ...club, logoUrl: resolvedLogoUrl }
 
-  // Resolver fotos dos participantes para base64 (necessário para Puppeteer em dev)
-  const resolvedParticipants = (raid.participants ?? []).map((p: any) => ({
+  const resolvedParticipants = await Promise.all((raid.participants ?? []).map(async (p: any) => ({
     ...p,
-    member: { ...p.member, resolvedPhotoUrl: resolveImageForPuppeteer(p.member?.photoUrl) },
-  }))
+    member: { ...p.member, resolvedPhotoUrl: await resolveImageForPuppeteer(p.member?.photoUrl) },
+  })))
 
   const opts = {
     includeRoster: true,
@@ -457,8 +456,10 @@ function getRouteTypeLabel(t: string) {
 // ─────────────────────────────────────────────────────────────────────────────
 export async function generateMemberCertificate(member: any, club: any, year: number): Promise<Buffer> {
   const accentColor = club.accentColor ?? '#dc2626'
-  const resolvedLogoUrl = resolveImageForPuppeteer(club.logoUrl)
-  const resolvedPhotoUrl = resolveImageForPuppeteer(member.photoUrl)
+  const [resolvedLogoUrl, resolvedPhotoUrl] = await Promise.all([
+    resolveImageForPuppeteer(club.logoUrl),
+    resolveImageForPuppeteer(member.photoUrl),
+  ])
 
   const participations: any[] = member.participations ?? []
   const totalRaids = participations.length
@@ -768,7 +769,7 @@ export async function generateAnnualReport(params: {
 }): Promise<Buffer> {
   const { club, year, raids, members, transactions } = params
   const accentColor = club.accentColor ?? '#dc2626'
-  const resolvedLogoUrl = resolveImageForPuppeteer(club.logoUrl)
+  const resolvedLogoUrl = await resolveImageForPuppeteer(club.logoUrl)
 
   const completedRaids = raids.filter((r) => r.status === 'COMPLETED')
   const totalKm = Math.round(completedRaids.reduce((s, r) => s + (r.estimatedKm ?? 0), 0))
@@ -983,8 +984,7 @@ function getRaidStatusLabel(s: string) {
 // Ficha de Membro
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildMemberProfileHTML(member: any, club: any, accentColor: string, resolvedLogoUrl: string | null): string {
-  const resolvedPhotoUrl = resolveImageForPuppeteer(member.photoUrl)
+function buildMemberProfileHTML(member: any, club: any, accentColor: string, resolvedLogoUrl: string | null, resolvedPhotoUrl: string | null): string {
   const initial = (member.nickname ?? member.fullName ?? '?').charAt(0).toUpperCase()
   const vehicles: any[] = member.vehicles ?? []
   const positions: any[] = member.positions ?? []
@@ -1120,21 +1120,22 @@ function buildMemberProfileHTML(member: any, club: any, accentColor: string, res
 
 export async function generateMemberProfilePDF(member: any, club: any): Promise<Buffer> {
   const accentColor = club.accentColor ?? '#dc2626'
-  const resolvedLogoUrl = resolveImageForPuppeteer(club.logoUrl)
-  const html = buildMemberProfilePageHTML([member], club, accentColor, resolvedLogoUrl)
+  const resolvedLogoUrl = await resolveImageForPuppeteer(club.logoUrl)
+  const html = await buildMemberProfilePageHTML([member], club, accentColor, resolvedLogoUrl)
   return launchPuppeteerPDF(html)
 }
 
 export async function generateAllMembersProfilesPDF(members: any[], club: any): Promise<Buffer> {
   const accentColor = club.accentColor ?? '#dc2626'
-  const resolvedLogoUrl = resolveImageForPuppeteer(club.logoUrl)
-  const html = buildMemberProfilePageHTML(members, club, accentColor, resolvedLogoUrl)
+  const resolvedLogoUrl = await resolveImageForPuppeteer(club.logoUrl)
+  const html = await buildMemberProfilePageHTML(members, club, accentColor, resolvedLogoUrl)
   return launchPuppeteerPDF(html)
 }
 
-function buildMemberProfilePageHTML(members: any[], club: any, accentColor: string, resolvedLogoUrl: string | null): string {
+async function buildMemberProfilePageHTML(members: any[], club: any, accentColor: string, resolvedLogoUrl: string | null): Promise<string> {
+  const resolvedPhotos = await Promise.all(members.map((m) => resolveImageForPuppeteer(m.photoUrl)))
   const membersHTML = members
-    .map((m, i) => buildMemberProfileHTML(m, club, accentColor, resolvedLogoUrl) + (i < members.length - 1 ? '<div class="page-break"></div>' : ''))
+    .map((m, i) => buildMemberProfileHTML(m, club, accentColor, resolvedLogoUrl, resolvedPhotos[i]) + (i < members.length - 1 ? '<div class="page-break"></div>' : ''))
     .join('')
 
   return `<!DOCTYPE html>
