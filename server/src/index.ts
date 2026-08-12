@@ -1,7 +1,7 @@
 import './prisma-patch' // MUST be first — patches Prisma before any Prisma code is loaded
 import './env'
 import app from './app'
-import { recreatePrismaClient } from './lib/prisma'
+import { prisma, recreatePrismaClient } from './lib/prisma'
 
 const socketPath = process.env.LSNODE_SOCKET
 const PORT = parseInt(process.env.PORT ?? '3001', 10)
@@ -38,6 +38,8 @@ process.on('uncaughtException', (err) => {
   console.error('Uncaught exception:', err)
   process.exit(1)
 })
+
+prisma.$connect().catch(() => {})
 
 if (socketPath) {
   app.listen(socketPath, () => {

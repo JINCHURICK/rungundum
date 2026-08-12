@@ -60,7 +60,10 @@ type RaidStatus = typeof RAID_STATUS_VALUES[number]
 // Paginação opcional: ?page=1&limit=50 (sem estes params retorna tudo — backward compat)
 router.get('/', async (req: AuthRequest, res: Response) => {
   const rawStatus = typeof req.query.status === 'string' ? req.query.status : undefined
-  const status: RaidStatus | undefined = RAID_STATUS_VALUES.includes(rawStatus as any) ? rawStatus as RaidStatus : undefined
+  const statusList = rawStatus
+    ? (rawStatus.split(',').filter((s) => RAID_STATUS_VALUES.includes(s as any)) as RaidStatus[])
+    : []
+  const status: RaidStatus | undefined = statusList.length === 1 ? statusList[0] : undefined
   const search = typeof req.query.search === 'string' ? req.query.search.slice(0, 100) : undefined
   const year = typeof req.query.year === 'string' ? parseInt(req.query.year, 10) : undefined
   const dateFilter = year && !isNaN(year) ? {
@@ -74,7 +77,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 
   const where = {
     clubId: req.user!.clubId,
-    ...(status ? { status } : {}),
+    ...(statusList.length === 1 ? { status: statusList[0] } : statusList.length > 1 ? { status: { in: statusList } } : {}),
     ...dateFilter,
     ...(search ? {
       OR: [

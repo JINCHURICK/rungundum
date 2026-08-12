@@ -149,7 +149,7 @@ router.post('/register', async (req: Request, res: Response) => {
       },
     })
     const user = await prisma.user.create({
-      data: { clubId: club.id, email: data.email, passwordHash, role: data.role, verificationToken, verificationExpires },
+      data: { clubId: club.id, email: data.email, passwordHash, role: data.role, platformAdmin: data.role === 'APP_ADMIN', verificationToken, verificationExpires },
     })
     const member = await prisma.member.create({
       data: { clubId: club.id, userId: user.id, fullName: data.fullName, status: 'ACTIVE' },

@@ -12,41 +12,43 @@ import { Skeleton } from '@/components/ui/Skeleton'
 
 export default function Dashboard() {
   const { club, user } = useAuthStore()
-
-  const { data: raids = [], isLoading: raidsLoading } = useQuery({
-    queryKey: ['raids'],
-    queryFn: () => api.get('/raids').then((r) => r.data),
-  })
-
-  const { data: members = [], isLoading: membersLoading } = useQuery({
-    queryKey: ['members'],
-    queryFn: () => api.get('/members').then((r) => r.data),
-  })
-
-  const isLoading = raidsLoading || membersLoading
-
   const isAdmin = can(user?.role, 'RAIDS_WRITE')
+
+  const { data: stats, isLoading: statsLoading } = useQuery({
+    queryKey: ['stats'],
+    queryFn: () => api.get('/stats').then((r) => r.data),
+  })
+
+  const { data: recentPage, isLoading: recentLoading } = useQuery({
+    queryKey: ['raids', 'dashboard-recent'],
+    queryFn: () => api.get('/raids?page=1&limit=5').then((r) => r.data),
+  })
+
+  const { data: upcomingRaids = [], isLoading: upcomingLoading } = useQuery({
+    queryKey: ['raids', 'dashboard-upcoming'],
+    queryFn: () => api.get('/raids?status=CONFIRMED,IN_PROGRESS').then((r) => r.data),
+  })
 
   const { data: subData } = useQuery({
     queryKey: ['subscription-current'],
-    queryFn:  () => api.get('/subscriptions/current').then(r => r.data as any),
-    enabled:  isAdmin,
+    queryFn: () => api.get('/subscriptions/current').then((r) => r.data as any),
+    enabled: isAdmin,
   })
 
-  const upcomingRaids = raids.filter((r: any) => ['CONFIRMED', 'IN_PROGRESS'].includes(r.status))
-  const completedRaids = raids.filter((r: any) => r.status === 'COMPLETED')
-  const activeMembers = members.filter((m: any) => m.status === 'ACTIVE')
-  const subLimit   = subData?.memberLimit as number | null | undefined
-  const subUsage   = subData?.usagePercent as number | undefined
-  const subPlan    = subData?.subscription?.plan?.name as string | undefined
-  const nearLimit  = subLimit !== null && subLimit !== undefined && (subUsage ?? 0) >= 80
-  const atLimit    = subLimit !== null && subLimit !== undefined && (subUsage ?? 0) >= 100
+  const isLoading = statsLoading || recentLoading
+  const recentRaids: any[] = recentPage?.data ?? []
 
-  const stats = [
-    { label: 'Raids Realizados', value: completedRaids.length, icon: Map, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { label: 'Membros Activos', value: activeMembers.length, icon: Users, color: 'text-green-600', bg: 'bg-green-50' },
-    { label: 'Agendados', value: upcomingRaids.length, icon: Calendar, color: 'text-purple-600', bg: 'bg-purple-50' },
-    { label: 'Total de Raids', value: raids.length, icon: TrendingUp, color: 'text-orange-600', bg: 'bg-orange-50' },
+  const subLimit = subData?.memberLimit as number | null | undefined
+  const subUsage = subData?.usagePercent as number | undefined
+  const subPlan = subData?.subscription?.plan?.name as string | undefined
+  const nearLimit = subLimit !== null && subLimit !== undefined && (subUsage ?? 0) >= 80
+  const atLimit = subLimit !== null && subLimit !== undefined && (subUsage ?? 0) >= 100
+
+  const statsCards = [
+    { label: 'Raids Realizados', value: stats?.completedRaids ?? 0, icon: Map, color: 'text-blue-600', bg: 'bg-blue-50' },
+    { label: 'Membros Activos', value: stats?.activeMembers ?? 0, icon: Users, color: 'text-green-600', bg: 'bg-green-50' },
+    { label: 'Agendados', value: stats?.upcomingRaids ?? 0, icon: Calendar, color: 'text-purple-600', bg: 'bg-purple-50' },
+    { label: 'Total de Raids', value: stats?.totalRaids ?? 0, icon: TrendingUp, color: 'text-orange-600', bg: 'bg-orange-50' },
   ]
 
   return (
@@ -81,7 +83,7 @@ export default function Dashboard() {
               <p className={`text-xs mt-0.5 ${atLimit ? 'text-red-500' : 'text-amber-600'}`}>
                 {atLimit
                   ? `Não podes adicionar mais membros. Faz upgrade para continuar a crescer.`
-                  : `${activeMembers.length} de ${subLimit} membros activos. Considera fazer upgrade.`
+                  : `${stats?.activeMembers ?? 0} de ${subLimit} membros activos. Considera fazer upgrade.`
                 }
               </p>
               <div className="mt-2 w-full h-1.5 bg-white/60 rounded-full overflow-hidden">
@@ -113,7 +115,7 @@ export default function Dashboard() {
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {stats.map(({ label, value, icon: Icon, color, bg }) => (
+          {statsCards.map(({ label, value, icon: Icon, color, bg }) => (
             <Card key={label}>
               <CardContent className="flex items-center gap-3 py-4 px-4">
                 <div className={`p-2.5 rounded-xl flex-shrink-0 ${bg}`}>
@@ -130,7 +132,7 @@ export default function Dashboard() {
       )}
 
       {/* Upcoming raids */}
-      {!isLoading && upcomingRaids.length > 0 && (
+      {!upcomingLoading && upcomingRaids.length > 0 && (
         <div>
           <h2 className="font-semibold text-gray-900 mb-3">Próximos Raids</h2>
           <div className="space-y-2">
@@ -166,7 +168,18 @@ export default function Dashboard() {
           </Link>
         </div>
 
-        {raids.length === 0 ? (
+        {recentLoading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Card key={i}>
+                <CardContent className="py-3.5 px-4">
+                  <Skeleton className="h-4 w-2/3 rounded mb-2" />
+                  <Skeleton className="h-3 w-1/3 rounded" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : recentRaids.length === 0 ? (
           <Card>
             <CardContent className="py-10 text-center">
               <Map className="w-10 h-10 text-gray-300 mx-auto mb-3" />
@@ -180,7 +193,7 @@ export default function Dashboard() {
           </Card>
         ) : (
           <div className="space-y-2">
-            {raids.slice(0, 5).map((raid: any) => (
+            {recentRaids.map((raid: any) => (
               <Link key={raid.id} to={`/raids/${raid.id}`}>
                 <Card className="active:bg-gray-50 transition-colors">
                   <CardContent className="flex items-center gap-3 py-3.5 px-4">
@@ -221,7 +234,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <p className="text-sm font-medium text-gray-900">Membros</p>
-                <p className="text-xs text-gray-500">{activeMembers.length} activos</p>
+                <p className="text-xs text-gray-500">{stats?.activeMembers ?? 0} activos</p>
               </div>
               <ArrowRight size={16} className="ml-auto text-gray-300" />
             </Link>
