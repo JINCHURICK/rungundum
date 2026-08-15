@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { CheckCircle2, XCircle, Eye, Clock, Filter, ExternalLink } from 'lucide-react'
+import { CheckCircle2, XCircle, Eye, Filter, ExternalLink } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 type Payment = {

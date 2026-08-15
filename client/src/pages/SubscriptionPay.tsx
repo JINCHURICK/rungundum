@@ -16,7 +16,7 @@ type PaymentRecord = {
 type Step = 'plan' | 'bank' | 'proof' | 'done'
 
 export default function SubscriptionPay() {
-  const { user, club, logout, refreshToken } = useAuthStore()
+  const { club, logout, refreshToken } = useAuthStore()
   const navigate = useNavigate()
 
   const [step, setStep] = useState<Step>('plan')
