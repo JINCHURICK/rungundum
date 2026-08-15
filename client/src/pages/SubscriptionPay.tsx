@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/store/auth'
-import { LogOut, CreditCard, Building2, Copy, CheckCircle2, Upload, ArrowLeft, Loader2, X } from 'lucide-react'
+import { LogOut, CreditCard, Building2, Copy, CheckCircle2, Upload, ArrowLeft, Loader2, X, Clock, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 type PricingTier = { months: number; pricePerMonth: number; totalPrice: number; label: string }
@@ -14,7 +14,7 @@ type PaymentRecord = {
   bankHolder: string; bankName: string; bankIban: string; bankAccount: string
 }
 
-type Step = 'plan' | 'bank' | 'proof' | 'done'
+type Step = 'plan' | 'bank' | 'proof' | 'review' | 'done'
 
 export default function SubscriptionPay() {
   const { club, logout, refreshToken } = useAuthStore()
@@ -45,7 +45,9 @@ export default function SubscriptionPay() {
   useEffect(() => {
     if (pendingPayment && !payment) {
       setPayment(pendingPayment)
-      setStep(pendingPayment.status === 'PROOF_UPLOADED' ? 'done' : 'bank')
+      // PROOF_UPLOADED → ecrã de revisão (utilizador pode substituir comprovante ou criar novo pedido)
+      // PENDING_PROOF   → retoma dados bancários para enviar o comprovante
+      setStep(pendingPayment.status === 'PROOF_UPLOADED' ? 'review' : 'bank')
     }
   }, [pendingPayment])
 
@@ -91,7 +93,7 @@ export default function SubscriptionPay() {
       {/* Header mínimo */}
       <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          {step !== 'plan' && step !== 'done' && (
+          {step !== 'plan' && step !== 'done' && step !== 'review' && (
             <button onClick={() => setStep(step === 'proof' ? 'bank' : 'plan')} className="text-gray-400 hover:text-gray-600">
               <ArrowLeft size={18} />
             </button>
@@ -106,14 +108,19 @@ export default function SubscriptionPay() {
 
       {/* Steps indicator */}
       <div className="bg-white border-b border-gray-100 px-4 py-2 flex items-center gap-2 text-xs text-gray-400">
-        {(['plan', 'bank', 'proof', 'done'] as Step[]).map((s, i) => (
-          <div key={s} className="flex items-center gap-2">
-            {i > 0 && <div className="w-8 h-px bg-gray-200" />}
-            <span className={step === s ? 'text-red-600 font-semibold' : step > s ? 'text-green-600' : ''}>
-              {i + 1}. {s === 'plan' ? 'Plano' : s === 'bank' ? 'Pagamento' : s === 'proof' ? 'Comprovante' : 'Concluído'}
-            </span>
-          </div>
-        ))}
+        {(['plan', 'bank', 'proof', 'done'] as const).map((s, i) => {
+          const active = step === s || (step === 'review' && s === 'proof')
+          const done = (step === 'done' && i < 3) || (step === 'review' && i < 2) ||
+                       (step === 'proof' && i < 2) || (step === 'bank' && i < 1)
+          return (
+            <div key={s} className="flex items-center gap-2">
+              {i > 0 && <div className="w-8 h-px bg-gray-200" />}
+              <span className={active ? 'text-red-600 font-semibold' : done ? 'text-green-600' : ''}>
+                {i + 1}. {s === 'plan' ? 'Plano' : s === 'bank' ? 'Pagamento' : s === 'proof' ? 'Comprovante' : 'Concluído'}
+              </span>
+            </div>
+          )
+        })}
       </div>
 
       <div className="flex-1 flex items-start justify-center p-4 pt-8">
@@ -310,6 +317,42 @@ export default function SubscriptionPay() {
                 {uploadProof.isPending ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
                 Enviar comprovante
               </button>
+            </div>
+          )}
+
+          {/* ── STEP REVIEW: Comprovante em análise ── */}
+          {!loadingPending && step === 'review' && payment && (
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-5">
+                <Clock size={28} className="text-amber-500" />
+              </div>
+              <h1 className="text-xl font-bold text-gray-900 mb-2">Comprovante em análise</h1>
+              <p className="text-sm text-gray-500 mb-1">
+                A fatura <span className="font-mono font-semibold">{payment.invoiceNumber}</span> está a ser verificada pela equipa Rungundum.
+              </p>
+              <p className="text-sm text-gray-500 mb-8">
+                Receberás um email quando o acesso for reposto. Se precisas de substituir o comprovante ou efectuar uma nova transferência, usa as opções abaixo.
+              </p>
+              <div className="space-y-3 max-w-sm mx-auto">
+                <button
+                  onClick={() => { setProofFile(null); setStep('proof') }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-red-600 text-white font-semibold text-sm hover:bg-red-700 transition-colors"
+                >
+                  <Upload size={15} /> Substituir comprovante
+                </button>
+                <button
+                  onClick={() => { setPayment(null); setStep('plan') }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50"
+                >
+                  <RefreshCw size={14} /> Efectuar nova transferência
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center justify-center gap-2 w-full px-4 py-2 text-sm text-gray-400 hover:text-gray-600"
+                >
+                  <LogOut size={14} /> Terminar sessão
+                </button>
+              </div>
             </div>
           )}
 

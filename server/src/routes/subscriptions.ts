@@ -328,9 +328,9 @@ router.post('/payment', requirePermission('SUBSCRIPTIONS'), async (req: AuthRequ
       select: { name: true, acronym: true },
     })
 
-    // Cancelar pedidos antigos PENDING_PROOF — um clube só tem um pagamento activo de cada vez
+    // Cancelar pedidos anteriores ainda activos — um clube só tem um pagamento activo de cada vez
     await prisma.subscriptionPayment.updateMany({
-      where: { clubId: req.user!.clubId, status: 'PENDING_PROOF' },
+      where: { clubId: req.user!.clubId, status: { in: ['PENDING_PROOF', 'PROOF_UPLOADED'] } },
       data:  { status: 'REJECTED', reviewNotes: 'Substituído por novo pedido' },
     })
 
