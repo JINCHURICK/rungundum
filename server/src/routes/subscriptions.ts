@@ -328,6 +328,12 @@ router.post('/payment', requirePermission('SUBSCRIPTIONS'), async (req: AuthRequ
       select: { name: true, acronym: true },
     })
 
+    // Cancelar pedidos antigos PENDING_PROOF — um clube só tem um pagamento activo de cada vez
+    await prisma.subscriptionPayment.updateMany({
+      where: { clubId: req.user!.clubId, status: 'PENDING_PROOF' },
+      data:  { status: 'REJECTED', reviewNotes: 'Substituído por novo pedido' },
+    })
+
     const payment = await prisma.subscriptionPayment.create({
       data: { clubId: req.user!.clubId, planCode, billingCycle, amountKz, invoiceNumber },
     })
@@ -366,22 +372,26 @@ router.post('/payment/:id/proof', requirePermission('SUBSCRIPTIONS'), upload.sin
       data: { proofUrl, status: 'PROOF_UPLOADED' },
     })
 
-    const notifyEmail = process.env.PLATFORM_NOTIFY_EMAIL ?? process.env.PLATFORM_ADMIN_EMAIL
-    if (notifyEmail) {
-      const club = await prisma.club.findUnique({ where: { id: payment.clubId }, select: { name: true } })
-      const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5173'
-      // proofUrl é um path relativo (/uploads/...) — converter para URL absoluta para o email
-      const absoluteProofUrl = proofUrl.startsWith('http') ? proofUrl : `${clientUrl}${proofUrl}`
-      await sendPaymentProofReceived({
-        to: notifyEmail,
-        clubName:     club?.name ?? payment.clubId,
-        invoiceNumber: payment.invoiceNumber,
-        planCode:     payment.planCode,
-        billingCycle: payment.billingCycle,
-        amountKz:     payment.amountKz,
-        proofUrl:     absoluteProofUrl,
-        adminUrl: `${clientUrl}/platform-admin/payment-requests`,
-      })
+    // Email de notificação — falha isolada para não bloquear a resposta ao cliente
+    try {
+      const notifyEmail = process.env.PLATFORM_NOTIFY_EMAIL ?? process.env.PLATFORM_ADMIN_EMAIL
+      if (notifyEmail) {
+        const club = await prisma.club.findUnique({ where: { id: payment.clubId }, select: { name: true } })
+        const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5173'
+        const absoluteProofUrl = proofUrl.startsWith('http') ? proofUrl : `${clientUrl}${proofUrl}`
+        await sendPaymentProofReceived({
+          to: notifyEmail,
+          clubName:      club?.name ?? payment.clubId,
+          invoiceNumber: payment.invoiceNumber,
+          planCode:      payment.planCode,
+          billingCycle:  payment.billingCycle,
+          amountKz:      payment.amountKz,
+          proofUrl:      absoluteProofUrl,
+          adminUrl:      `${clientUrl}/platform-admin/payment-requests`,
+        })
+      }
+    } catch (emailErr) {
+      console.error('[proof] falha ao enviar email de notificação:', emailErr)
     }
 
     return res.json(updated)
