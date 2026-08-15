@@ -5,7 +5,7 @@ import { prisma } from '../lib/prisma'
 import { authenticate, requireRole, requirePlatformAdmin, requirePermission, AuthRequest } from '../middleware/auth'
 import { PLAN_LIMITS, PLAN_LABELS, PLAN_PRICES, getEffectiveLimits, type PlanKey } from '../lib/plans'
 import { sendUpgradeRequest, sendPaymentProofReceived, sendSubscriptionApproved, sendSubscriptionRejected } from '../services/email'
-import { uploadToCloudinary } from '../services/cloudinary'
+import { uploadToCloudinary, uploadDocumentToCloudinary } from '../services/cloudinary'
 import { readPlanCache } from '../lib/plan-cache'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } })
@@ -329,7 +329,7 @@ router.post('/payment/:id/proof', requirePermission('SUBSCRIPTIONS'), upload.sin
 
     if (!req.file) return res.status(400).json({ error: 'Ficheiro em falta' })
 
-    const proofUrl = await uploadToCloudinary(req.file.buffer, `subscriptions/${payment.clubId}/proofs`)
+    const proofUrl = await uploadDocumentToCloudinary(req.file.buffer, `subscriptions/${payment.clubId}/proofs`)
 
     const updated = await prisma.subscriptionPayment.update({
       where: { id: payment.id },

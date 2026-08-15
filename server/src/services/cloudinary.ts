@@ -33,6 +33,17 @@ export function validateImageBuffer(buffer: Buffer): string {
   throw new Error('Tipo de ficheiro não permitido. Apenas JPEG, PNG, GIF ou WebP são aceites.')
 }
 
+// Valida imagens OU PDF — para documentos como comprovantes de pagamento
+export function validateDocumentBuffer(buffer: Buffer): string {
+  // Tentar como imagem primeiro
+  try { return validateImageBuffer(buffer) } catch {}
+  // PDF: magic bytes %PDF = 0x25 0x50 0x44 0x46
+  if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) {
+    return 'application/pdf'
+  }
+  throw new Error('Tipo de ficheiro não permitido. Apenas JPEG, PNG, WebP ou PDF são aceites.')
+}
+
 function ensureDir(dir: string) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 }
@@ -177,20 +188,16 @@ function handleStaleRequest(errorMessage: string): number | null {
   return Math.round(correctedMs / 1000)
 }
 
-export async function uploadToCloudinary(buffer: Buffer, folder: string): Promise<string> {
-  // Validar magic bytes antes de qualquer upload
-  const detectedMime = validateImageBuffer(buffer)
-
-  const hasCloudinary = process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_KEY.trim() !== ''
-
-  if (!hasCloudinary) {
-    return saveLocally(buffer, folder, detectedMime)
-  }
-
+async function _doCloudinaryUpload(
+  buffer: Buffer,
+  folder: string,
+  resourceType: 'image' | 'raw' | 'auto',
+  extraOptions: Record<string, any> = {},
+): Promise<string> {
   function doUpload(timestamp: number): Promise<string> {
     return new Promise<string>((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
-        { folder, resource_type: 'image', transformation: [{ quality: 'auto', fetch_format: 'auto' }], timestamp },
+        { folder, resource_type: resourceType, timestamp, ...extraOptions },
         (error, result) => {
           if (error) return reject(error)
           resolve(result!.secure_url)
@@ -208,11 +215,36 @@ export async function uploadToCloudinary(buffer: Buffer, folder: string): Promis
   try {
     return await withTimeout(doUpload(getRealTimestampSeconds()))
   } catch (err: any) {
-    // Se o relógio do sistema estiver dessincronizado, auto-corrige e tenta uma vez mais
     if (typeof err?.message === 'string' && err.message.includes('Stale request')) {
       const correctedTs = handleStaleRequest(err.message)
       if (correctedTs) return await withTimeout(doUpload(correctedTs))
     }
     throw err
   }
+}
+
+export async function uploadToCloudinary(buffer: Buffer, folder: string): Promise<string> {
+  const detectedMime = validateImageBuffer(buffer)
+  const hasCloudinary = process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_KEY.trim() !== ''
+  if (!hasCloudinary) return saveLocally(buffer, folder, detectedMime)
+  return _doCloudinaryUpload(buffer, folder, 'image', { transformation: [{ quality: 'auto', fetch_format: 'auto' }] })
+}
+
+// Para comprovantes de pagamento — aceita imagens e PDF
+export async function uploadDocumentToCloudinary(buffer: Buffer, folder: string): Promise<string> {
+  const detectedMime = validateDocumentBuffer(buffer)
+  const hasCloudinary = process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_KEY.trim() !== ''
+  if (!hasCloudinary) {
+    if (detectedMime === 'application/pdf') {
+      const safeFolder = folder.replace(/\.\./g, '').replace(/[^a-zA-Z0-9/_-]/g, '')
+      const dir = path.join(UPLOADS_DIR, safeFolder)
+      fs.mkdirSync(dir, { recursive: true })
+      const filename = `${Date.now()}.pdf`
+      fs.writeFileSync(path.join(dir, filename), buffer)
+      return `/uploads/${safeFolder}/${filename}`
+    }
+    return saveLocally(buffer, folder, detectedMime)
+  }
+  // resource_type 'auto' aceita imagens e PDF no Cloudinary
+  return _doCloudinaryUpload(buffer, folder, 'auto')
 }
