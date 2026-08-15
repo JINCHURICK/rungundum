@@ -245,6 +245,6 @@ export async function uploadDocumentToCloudinary(buffer: Buffer, folder: string)
     }
     return saveLocally(buffer, folder, detectedMime)
   }
-  // resource_type 'auto' aceita imagens e PDF no Cloudinary
-  return _doCloudinaryUpload(buffer, folder, 'auto')
+  // resource_type 'auto' aceita imagens e PDF no Cloudinary; access_mode public garante acesso sem auth
+  return _doCloudinaryUpload(buffer, folder, 'auto', { access_mode: 'public' })
 }
