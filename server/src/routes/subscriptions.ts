@@ -272,6 +272,36 @@ async function generateInvoiceNumber(): Promise<string> {
   return `${prefix}${String(lastNum + 1).padStart(4, '0')}`
 }
 
+// GET /api/subscriptions/payment/pending — pedido pendente ou com comprovante (para retoma de fluxo)
+router.get('/payment/pending', requirePermission('SUBSCRIPTIONS'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const planConfigs = readPlanCache() ?? []
+    const payment = await prisma.subscriptionPayment.findFirst({
+      where: {
+        clubId: req.user!.clubId,
+        status: { in: ['PENDING_PROOF', 'PROOF_UPLOADED'] },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+    if (!payment) return res.json(null)
+
+    const plan = planConfigs.find((p: any) => p.key === payment.planCode)
+    const club = await prisma.club.findUnique({
+      where: { id: req.user!.clubId },
+      select: { name: true, acronym: true },
+    })
+    return res.json({
+      ...payment,
+      planName:    plan?.name ?? payment.planCode,
+      clubName:    club?.name ?? '',
+      bankHolder:  process.env.BANK_HOLDER  ?? '',
+      bankName:    process.env.BANK_NAME    ?? '',
+      bankIban:    process.env.BANK_IBAN    ?? '',
+      bankAccount: process.env.BANK_ACCOUNT ?? '',
+    })
+  } catch (err) { next(err) }
+})
+
 // POST /api/subscriptions/payment — criar pedido de pagamento (gera fatura)
 router.post('/payment', requirePermission('SUBSCRIPTIONS'), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {

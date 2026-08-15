@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { api } from '@/lib/api'
@@ -32,6 +32,22 @@ export default function SubscriptionPay() {
     queryKey: ['plans-active'],
     queryFn: async () => (await api.get('/plans/public')).data.filter((p: Plan) => p.active !== false && p.key !== 'FREE'),
   })
+
+  // Retomar pedido pendente se existir (utilizador navegou para fora antes de enviar comprovante)
+  const { data: pendingPayment, isLoading: loadingPending } = useQuery<PaymentRecord | null>({
+    queryKey: ['pending-payment'],
+    queryFn: async () => {
+      try { return (await api.get('/subscriptions/payment/pending')).data } catch { return null }
+    },
+    enabled: !payment,
+  })
+
+  useEffect(() => {
+    if (pendingPayment && !payment) {
+      setPayment(pendingPayment)
+      setStep(pendingPayment.status === 'PROOF_UPLOADED' ? 'done' : 'bank')
+    }
+  }, [pendingPayment])
 
   const createPayment = useMutation({
     mutationFn: (body: { planCode: string; billingCycle: string }) => api.post('/subscriptions/payment', body),
@@ -103,8 +119,13 @@ export default function SubscriptionPay() {
       <div className="flex-1 flex items-start justify-center p-4 pt-8">
         <div className="w-full max-w-lg">
 
+          {/* Spinner enquanto verifica pedido pendente */}
+          {loadingPending && !payment && (
+            <div className="flex justify-center py-16"><Loader2 size={24} className="animate-spin text-gray-400" /></div>
+          )}
+
           {/* ── STEP 1: Escolha de plano ── */}
-          {step === 'plan' && (
+          {!loadingPending && step === 'plan' && (
             <div>
               <h1 className="text-xl font-bold text-gray-900 mb-1">Renovar subscrição</h1>
               <p className="text-sm text-gray-500 mb-6">Escolhe o plano e o período de faturação.</p>
@@ -178,7 +199,7 @@ export default function SubscriptionPay() {
           )}
 
           {/* ── STEP 2: Dados bancários ── */}
-          {step === 'bank' && payment && (
+          {!loadingPending && step === 'bank' && payment && (
             <div>
               <h1 className="text-xl font-bold text-gray-900 mb-1">Efectua a transferência</h1>
               <p className="text-sm text-gray-500 mb-4">
@@ -241,7 +262,7 @@ export default function SubscriptionPay() {
           )}
 
           {/* ── STEP 3: Upload comprovante ── */}
-          {step === 'proof' && payment && (
+          {!loadingPending && step === 'proof' && payment && (
             <div>
               <h1 className="text-xl font-bold text-gray-900 mb-1">Enviar comprovante</h1>
               <p className="text-sm text-gray-500 mb-6">
@@ -293,7 +314,7 @@ export default function SubscriptionPay() {
           )}
 
           {/* ── STEP 4: Concluído ── */}
-          {step === 'done' && (
+          {!loadingPending && step === 'done' && (
             <div className="text-center">
               <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-5">
                 <CheckCircle2 size={32} className="text-green-600" />
