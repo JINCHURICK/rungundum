@@ -246,9 +246,15 @@ export async function uploadDocumentToCloudinary(buffer: Buffer, folder: string)
     return saveLocally(buffer, folder, detectedMime)
   }
   if (detectedMime === 'application/pdf') {
-    // PDFs devem usar resource_type 'raw' → URL /raw/upload/ acessível directamente sem auth
-    return _doCloudinaryUpload(buffer, folder, 'raw', { access_mode: 'public' })
+    // resource_type raw + public_id com .pdf → URL /raw/upload/.../filename.pdf acessível directamente
+    return _doCloudinaryUpload(buffer, folder, 'raw', {
+      public_id: `${Date.now()}.pdf`,
+      access_mode: 'public',
+    })
   }
   // Imagens usam 'image' com optimização
-  return _doCloudinaryUpload(buffer, folder, 'image', { transformation: [{ quality: 'auto', fetch_format: 'auto' }], access_mode: 'public' })
+  return _doCloudinaryUpload(buffer, folder, 'image', {
+    transformation: [{ quality: 'auto', fetch_format: 'auto' }],
+    access_mode: 'public',
+  })
 }
