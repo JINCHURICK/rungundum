@@ -6,6 +6,7 @@ import { authenticate, requireRole, requirePlatformAdmin, requirePermission, Aut
 import { PLAN_LIMITS, PLAN_LABELS, PLAN_PRICES, getEffectiveLimits, type PlanKey } from '../lib/plans'
 import { sendUpgradeRequest, sendPaymentProofReceived, sendSubscriptionApproved, sendSubscriptionRejected } from '../services/email'
 import { uploadToCloudinary } from '../services/cloudinary'
+import { readPlanCache } from '../lib/plan-cache'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } })
 
@@ -279,10 +280,17 @@ router.post('/payment', requirePermission('SUBSCRIPTIONS'), async (req: AuthRequ
       billingCycle: z.enum(['MONTHLY', 'ANNUAL']),
     }).parse(req.body)
 
-    const plan = await prisma.plan.findUnique({ where: { code: planCode } })
-    if (!plan || !plan.isActive) return res.status(404).json({ error: 'Plano não encontrado' })
+    // Ler plano do file cache (configurado em /platform-admin/plans)
+    const planConfigs = readPlanCache() ?? []
+    const plan = planConfigs.find((p: any) => p.key === planCode && p.active !== false)
+    if (!plan) return res.status(404).json({ error: 'Plano não encontrado' })
 
-    const amountKz      = billingCycle === 'ANNUAL' ? plan.priceAnnualKz : plan.priceMonthlyKz
+    const months = billingCycle === 'ANNUAL' ? 12 : 1
+    const tier   = plan.pricingTiers?.find((t: any) => t.months === months)
+               ?? plan.pricingTiers?.[0]
+    if (!tier) return res.status(400).json({ error: 'Plano sem preço configurado' })
+
+    const amountKz      = tier.totalPrice as number
     const invoiceNumber = await generateInvoiceNumber()
 
     const club = await prisma.club.findUnique({

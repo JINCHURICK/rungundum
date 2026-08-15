@@ -6,7 +6,8 @@ import { useAuthStore } from '@/store/auth'
 import { LogOut, CreditCard, Building2, Copy, CheckCircle2, Upload, ArrowLeft, Loader2, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-type Plan = { id: string; code: string; name: string; priceMonthlyKz: number; priceAnnualKz: number; memberLimit: number | null }
+type PricingTier = { months: number; pricePerMonth: number; totalPrice: number; label: string }
+type Plan = { key: string; name: string; pricingTiers: PricingTier[]; maxMembers: number | null; active: boolean }
 type PaymentRecord = {
   id: string; invoiceNumber: string; planCode: string; billingCycle: string
   amountKz: number; status: string; planName: string; clubName: string
@@ -29,12 +30,12 @@ export default function SubscriptionPay() {
 
   const { data: plans = [], isLoading: loadingPlans } = useQuery<Plan[]>({
     queryKey: ['plans-active'],
-    queryFn: async () => (await api.get('/plans')).data.filter((p: Plan) => p.code !== 'FREE'),
+    queryFn: async () => (await api.get('/plans/public')).data.filter((p: Plan) => p.active !== false && p.key !== 'FREE'),
   })
 
   const createPayment = useMutation({
     mutationFn: (body: { planCode: string; billingCycle: string }) => api.post('/subscriptions/payment', body),
-    onSuccess: ({ data }) => { setPayment(data); setStep('bank') },
+    onSuccess: ({ data }: any) => { setPayment(data); setStep('bank') },
     onError: (e: any) => toast.error(e.response?.data?.error ?? 'Erro ao criar pedido'),
   })
 
@@ -62,9 +63,12 @@ export default function SubscriptionPay() {
     })
   }
 
-  const price = selectedPlan
-    ? (billingCycle === 'ANNUAL' ? selectedPlan.priceAnnualKz : selectedPlan.priceMonthlyKz)
-    : 0
+  function getTier(plan: Plan, cycle: 'MONTHLY' | 'ANNUAL') {
+    const months = cycle === 'ANNUAL' ? 12 : 1
+    return plan.pricingTiers.find(t => t.months === months) ?? plan.pricingTiers[0] ?? null
+  }
+
+  const price = selectedPlan ? (getTier(selectedPlan, billingCycle)?.totalPrice ?? 0) : 0
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -125,11 +129,11 @@ export default function SubscriptionPay() {
               ) : (
                 <div className="space-y-3 mb-6">
                   {plans.map(plan => {
-                    const p = billingCycle === 'ANNUAL' ? plan.priceAnnualKz : plan.priceMonthlyKz
-                    const isSelected = selectedPlan?.id === plan.id
+                    const tier = getTier(plan, billingCycle)
+                    const isSelected = selectedPlan?.key === plan.key
                     return (
                       <button
-                        key={plan.id}
+                        key={plan.key}
                         onClick={() => setSelectedPlan(plan)}
                         className={`w-full text-left rounded-xl border-2 p-4 transition-all ${isSelected ? 'border-red-600 bg-red-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
                       >
@@ -137,12 +141,18 @@ export default function SubscriptionPay() {
                           <div>
                             <div className="font-semibold text-gray-900">{plan.name}</div>
                             <div className="text-xs text-gray-500 mt-0.5">
-                              {plan.memberLimit ? `Até ${plan.memberLimit} membros` : 'Membros ilimitados'}
+                              {plan.maxMembers ? `Até ${plan.maxMembers} membros` : 'Membros ilimitados'}
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="font-bold text-gray-900">{p.toLocaleString('pt-AO')} Kz</div>
-                            <div className="text-xs text-gray-400">{billingCycle === 'ANNUAL' ? 'por ano' : 'por mês'}</div>
+                            {tier ? (
+                              <>
+                                <div className="font-bold text-gray-900">{tier.totalPrice.toLocaleString('pt-AO')} Kz</div>
+                                <div className="text-xs text-gray-400">{billingCycle === 'ANNUAL' ? 'por ano' : 'por mês'}</div>
+                              </>
+                            ) : (
+                              <div className="text-xs text-gray-400">Sem preço</div>
+                            )}
                           </div>
                         </div>
                         {isSelected && (
@@ -158,7 +168,7 @@ export default function SubscriptionPay() {
 
               <button
                 disabled={!selectedPlan || createPayment.isPending}
-                onClick={() => createPayment.mutate({ planCode: selectedPlan!.code, billingCycle })}
+                onClick={() => createPayment.mutate({ planCode: selectedPlan!.key, billingCycle })}
                 className="w-full py-3 rounded-xl bg-red-600 text-white font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
               >
                 {createPayment.isPending ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
