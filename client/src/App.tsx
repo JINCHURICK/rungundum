@@ -34,9 +34,11 @@ const PlatformClubs       = lazy(() => import('@/pages/platform-admin/PlatformCl
 const PlatformClubDetail  = lazy(() => import('@/pages/platform-admin/PlatformClubDetail'))
 const PlatformSubscriptions = lazy(() => import('@/pages/platform-admin/PlatformSubscriptions'))
 const PlatformRequests    = lazy(() => import('@/pages/platform-admin/PlatformRequests'))
-const PlatformPlans       = lazy(() => import('@/pages/platform-admin/PlatformPlans'))
-const LandingPage         = lazy(() => import('@/pages/LandingPage'))
-const SubscriptionExpired = lazy(() => import('@/pages/SubscriptionExpired'))
+const PlatformPlans           = lazy(() => import('@/pages/platform-admin/PlatformPlans'))
+const PlatformPaymentRequests = lazy(() => import('@/pages/platform-admin/PlatformPaymentRequests'))
+const LandingPage             = lazy(() => import('@/pages/LandingPage'))
+const SubscriptionExpired     = lazy(() => import('@/pages/SubscriptionExpired'))
+const SubscriptionPay         = lazy(() => import('@/pages/SubscriptionPay'))
 
 // ── loading fallback ───────────────────────────────────────────────────────────
 
@@ -166,6 +168,7 @@ export default function App() {
 
             <Route path="/" element={<LandingPage />} />
             <Route path="/subscription-expired" element={<SubscriptionExpired />} />
+            <Route path="/subscription/pay"     element={<SubscriptionPay />} />
 
             <Route element={<ProtectedLayout />}>
               <Route path="/dashboard"               element={<Dashboard />} />
@@ -193,6 +196,7 @@ export default function App() {
               <Route path="clubs/:id"           element={<PlatformClubDetail />} />
               <Route path="subscriptions"       element={<PlatformSubscriptions />} />
               <Route path="requests"            element={<PlatformRequests />} />
+              <Route path="payment-requests"   element={<PlatformPaymentRequests />} />
               <Route path="plans"               element={<PlatformPlans />} />
             </Route>
 

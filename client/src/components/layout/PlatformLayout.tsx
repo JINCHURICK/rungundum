@@ -1,6 +1,6 @@
 ﻿import { useState, useCallback } from 'react'
 import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Building2, CreditCard, LogOut, Menu, X, ChevronLeft, Bell, Settings2 } from 'lucide-react'
+import { LayoutDashboard, Building2, CreditCard, LogOut, Menu, X, ChevronLeft, Bell, Settings2, Receipt } from 'lucide-react'
 import { useAuthStore } from '@/store/auth'
 import { cn } from '@/lib/utils'
 import { api } from '@/lib/api'
@@ -13,6 +13,7 @@ const navItems = [
   { to: '/platform-admin/clubs', icon: Building2, label: 'Clubes' },
   { to: '/platform-admin/subscriptions', icon: CreditCard, label: 'Subscrições' },
   { to: '/platform-admin/requests', icon: Bell, label: 'Pedidos' },
+  { to: '/platform-admin/payment-requests', icon: Receipt, label: 'Pagamentos' },
   { to: '/platform-admin/plans', icon: Settings2, label: 'Planos' },
 ]
 

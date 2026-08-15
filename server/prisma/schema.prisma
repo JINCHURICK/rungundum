@@ -37,6 +37,7 @@ model Club {
   leagueEntries         LeagueEntry[]
   subscriptionRequests  SubscriptionRequest[]
   subscription          Subscription?
+  subscriptionPayments  SubscriptionPayment[]
   disciplinaryProcesses DisciplinaryProcess[]
   suspensions           Suspension[]
   fines                 Fine[]
@@ -548,6 +549,38 @@ enum RequestStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+enum SubscriptionPaymentStatus {
+  PENDING_PROOF
+  PROOF_UPLOADED
+  APPROVED
+  REJECTED
+}
+
+model SubscriptionPayment {
+  id            String                    @id @default(cuid())
+  clubId        String
+  planCode      String
+  billingCycle  BillingCycle              @default(MONTHLY)
+  amountKz      Int
+  invoiceNumber String                    @unique
+  status        SubscriptionPaymentStatus @default(PENDING_PROOF)
+  proofUrl      String?
+  bankRef       String?
+  notes         String?                   @db.Text
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  reviewNotes   String?                   @db.Text
+  renewMonths   Int?
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+
+  club          Club                      @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([clubId])
+  @@index([status])
+  @@map("subscription_payments")
 }
 
 model DisciplinaryProcess {

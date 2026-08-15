@@ -1,4 +1,4 @@
-import { Router, Response } from 'express'
+import { Router, Response, NextFunction } from 'express'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
@@ -6,6 +6,7 @@ import { authenticate, requirePlatformAdmin, AuthRequest, invalidateClubStatusCa
 import { PLAN_LABELS, PLAN_LIMITS, PLAN_PRICES, type PlanKey } from '../lib/plans'
 import { readPlanCache, writePlanCache } from '../lib/plan-cache'
 import { recreatePrismaClient } from '../lib/prisma'
+import { sendSubscriptionApproved, sendSubscriptionRejected } from '../services/email'
 
 const router = Router()
 router.use(authenticate, requirePlatformAdmin)
@@ -327,6 +328,112 @@ router.put('/plan-configs', async (req: AuthRequest, res: Response) => {
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors })
     throw err
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PEDIDOS DE PAGAMENTO — COMPROVANTES DE TRANSFERÊNCIA
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/platform-admin/payment-requests
+router.get('/payment-requests', async (_req: AuthRequest, res: Response) => {
+  const payments = await prisma.subscriptionPayment.findMany({
+    include: { club: { select: { id: true, name: true, acronym: true, location: true, plan: true, planStatus: true } } },
+    orderBy: { createdAt: 'desc' },
+  })
+  return res.json(payments)
+})
+
+// PATCH /api/platform-admin/payment-requests/:id — aprovar ou rejeitar
+router.patch('/payment-requests/:id', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { action, renewMonths, reviewNotes } = z.object({
+      action:      z.enum(['APPROVE', 'REJECT']),
+      renewMonths: z.number().int().min(1).max(36).optional(),
+      reviewNotes: z.string().optional(),
+    }).parse(req.body)
+
+    const payment = await prisma.subscriptionPayment.findUnique({
+      where: { id: req.params.id },
+      include: { club: { select: { name: true, planExpiresAt: true } } },
+    })
+    if (!payment) return res.status(404).json({ error: 'Pedido não encontrado' })
+    if (payment.status === 'APPROVED') return res.status(409).json({ error: 'Já aprovado' })
+
+    const now = new Date()
+
+    if (action === 'APPROVE') {
+      if (!renewMonths) return res.status(400).json({ error: 'Número de meses obrigatório para aprovar' })
+
+      // Calcula nova data de expiração (soma ao período actual se ainda não expirou)
+      const base = payment.club.planExpiresAt && payment.club.planExpiresAt > now
+        ? payment.club.planExpiresAt : now
+      const newExpiry = new Date(base)
+      newExpiry.setMonth(newExpiry.getMonth() + renewMonths)
+
+      // Mapeia planCode para o enum ClubPlan (compatibilidade legacy)
+      const planMap: Record<string, string> = { FREE: 'FREE', STARTER: 'STARTER', PRO: 'PRO', ENTERPRISE: 'ENTERPRISE' }
+      const newPlan = planMap[payment.planCode.toUpperCase()] ?? 'STARTER'
+
+      await prisma.$transaction([
+        prisma.subscriptionPayment.update({
+          where: { id: payment.id },
+          data: { status: 'APPROVED', reviewNotes: reviewNotes ?? null, reviewedAt: now, renewMonths, reviewedBy: req.user!.userId },
+        }),
+        prisma.club.update({
+          where: { id: payment.clubId },
+          data: { plan: newPlan as any, planStatus: 'ACTIVE', planExpiresAt: newExpiry },
+        }),
+      ])
+
+      invalidateClubStatusCache(payment.clubId)
+
+      // Sincroniza também o modelo Subscription (novo sistema)
+      const plan = await prisma.plan.findFirst({
+        where: { code: { equals: payment.planCode, mode: 'insensitive' } },
+      })
+      if (plan) {
+        await prisma.subscription.upsert({
+          where:  { clubId: payment.clubId },
+          update: { planId: plan.id, billingCycle: payment.billingCycle, status: 'ACTIVE', currentPeriodStart: now, currentPeriodEnd: newExpiry },
+          create: { clubId: payment.clubId, planId: plan.id, billingCycle: payment.billingCycle, status: 'ACTIVE', currentPeriodStart: now, currentPeriodEnd: newExpiry },
+        })
+      }
+
+      const adminUser = await prisma.user.findFirst({
+        where: { clubId: payment.clubId, role: { in: ['ADMIN', 'APP_ADMIN'] } },
+        select: { email: true },
+      })
+      if (adminUser) {
+        await sendSubscriptionApproved({
+          to: adminUser.email, clubName: payment.club.name,
+          invoiceNumber: payment.invoiceNumber, planCode: payment.planCode,
+          renewMonths, newExpiry, clientUrl: process.env.CLIENT_URL ?? 'http://localhost:5173',
+        })
+      }
+    } else {
+      await prisma.subscriptionPayment.update({
+        where: { id: payment.id },
+        data: { status: 'REJECTED', reviewNotes: reviewNotes ?? null, reviewedAt: now, reviewedBy: req.user!.userId },
+      })
+
+      const adminUser = await prisma.user.findFirst({
+        where: { clubId: payment.clubId, role: { in: ['ADMIN', 'APP_ADMIN'] } },
+        select: { email: true },
+      })
+      if (adminUser) {
+        await sendSubscriptionRejected({
+          to: adminUser.email, clubName: payment.club.name,
+          invoiceNumber: payment.invoiceNumber, reviewNotes: reviewNotes ?? '',
+          clientUrl: process.env.CLIENT_URL ?? 'http://localhost:5173',
+        })
+      }
+    }
+
+    return res.json({ message: action === 'APPROVE' ? 'Subscrição aprovada com sucesso' : 'Pedido rejeitado' })
+  } catch (err) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors })
+    next(err)
   }
 })
 

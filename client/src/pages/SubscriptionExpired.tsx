@@ -1,8 +1,7 @@
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, LogOut, Mail } from 'lucide-react'
+import { AlertTriangle, LogOut, Mail, RefreshCw } from 'lucide-react'
 import { useAuthStore } from '@/store/auth'
 import { api } from '@/lib/api'
-import { Button } from '@/components/ui/Button'
 import toast from 'react-hot-toast'
 
 export default function SubscriptionExpired() {
@@ -16,7 +15,7 @@ export default function SubscriptionExpired() {
     toast.success('Sessão terminada')
   }
 
-  const isAdmin = user?.role === 'ADMIN'
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'APP_ADMIN'
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -41,12 +40,13 @@ export default function SubscriptionExpired() {
 
         <div className="space-y-3">
           {isAdmin && (
-            <Button
-              className="w-full"
-              onClick={() => navigate('/settings/subscription')}
+            <button
+              onClick={() => navigate('/subscription/pay')}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-red-600 text-white font-semibold text-sm hover:bg-red-700 transition-colors"
             >
-              Ver subscrição
-            </Button>
+              <RefreshCw size={15} />
+              Renovar subscrição
+            </button>
           )}
 
           <a

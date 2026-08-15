@@ -1,9 +1,13 @@
-import { Router, Response } from 'express'
+import { Router, Response, NextFunction } from 'express'
 import { z } from 'zod'
+import multer from 'multer'
 import { prisma } from '../lib/prisma'
 import { authenticate, requireRole, requirePlatformAdmin, AuthRequest } from '../middleware/auth'
 import { PLAN_LIMITS, PLAN_LABELS, PLAN_PRICES, getEffectiveLimits, type PlanKey } from '../lib/plans'
-import { sendUpgradeRequest } from '../services/email'
+import { sendUpgradeRequest, sendPaymentProofReceived, sendSubscriptionApproved, sendSubscriptionRejected } from '../services/email'
+import { uploadToCloudinary } from '../services/cloudinary'
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } })
 
 const router = Router()
 router.use(authenticate)
@@ -250,6 +254,117 @@ router.post('/switch-plan', requireRole('ADMIN'), async (req: AuthRequest, res: 
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors })
     throw err
   }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAGAMENTOS VIA TRANSFERÊNCIA BANCÁRIA
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function generateInvoiceNumber(): Promise<string> {
+  const year = new Date().getFullYear()
+  const prefix = `RNG-${year}-`
+  const last = await prisma.subscriptionPayment.findFirst({
+    where: { invoiceNumber: { startsWith: prefix } },
+    orderBy: { invoiceNumber: 'desc' },
+  })
+  const lastNum = last ? parseInt(last.invoiceNumber.split('-')[2], 10) : 0
+  return `${prefix}${String(lastNum + 1).padStart(4, '0')}`
+}
+
+// POST /api/subscriptions/payment — criar pedido de pagamento (gera fatura)
+router.post('/payment', requireRole('ADMIN'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { planCode, billingCycle } = z.object({
+      planCode:     z.string(),
+      billingCycle: z.enum(['MONTHLY', 'ANNUAL']),
+    }).parse(req.body)
+
+    const plan = await prisma.plan.findUnique({ where: { code: planCode } })
+    if (!plan || !plan.isActive) return res.status(404).json({ error: 'Plano não encontrado' })
+
+    const amountKz      = billingCycle === 'ANNUAL' ? plan.priceAnnualKz : plan.priceMonthlyKz
+    const invoiceNumber = await generateInvoiceNumber()
+
+    const club = await prisma.club.findUnique({
+      where: { id: req.user!.clubId },
+      select: { name: true, acronym: true },
+    })
+
+    const payment = await prisma.subscriptionPayment.create({
+      data: { clubId: req.user!.clubId, planCode, billingCycle, amountKz, invoiceNumber },
+    })
+
+    return res.status(201).json({
+      ...payment,
+      planName:  plan.name,
+      clubName:  club?.name,
+      clubAcronym: club?.acronym,
+      bankHolder:  process.env.BANK_HOLDER  ?? '',
+      bankName:    process.env.BANK_NAME    ?? '',
+      bankIban:    process.env.BANK_IBAN    ?? '',
+      bankAccount: process.env.BANK_ACCOUNT ?? '',
+    })
+  } catch (err) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors })
+    next(err)
+  }
+})
+
+// POST /api/subscriptions/payment/:id/proof — upload comprovante
+router.post('/payment/:id/proof', requireRole('ADMIN'), upload.single('proof'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const payment = await prisma.subscriptionPayment.findFirst({
+      where: { id: req.params.id, clubId: req.user!.clubId },
+    })
+    if (!payment) return res.status(404).json({ error: 'Pedido não encontrado' })
+    if (payment.status === 'APPROVED') return res.status(409).json({ error: 'Pagamento já aprovado' })
+
+    if (!req.file) return res.status(400).json({ error: 'Ficheiro em falta' })
+
+    const proofUrl = await uploadToCloudinary(req.file.buffer, `subscriptions/${payment.clubId}/proofs`)
+
+    const updated = await prisma.subscriptionPayment.update({
+      where: { id: payment.id },
+      data: { proofUrl, status: 'PROOF_UPLOADED' },
+    })
+
+    const notifyEmail = process.env.PLATFORM_NOTIFY_EMAIL ?? process.env.PLATFORM_ADMIN_EMAIL
+    if (notifyEmail) {
+      const club = await prisma.club.findUnique({ where: { id: payment.clubId }, select: { name: true } })
+      const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5173'
+      await sendPaymentProofReceived({
+        to: notifyEmail,
+        clubName:     club?.name ?? payment.clubId,
+        invoiceNumber: payment.invoiceNumber,
+        planCode:     payment.planCode,
+        billingCycle: payment.billingCycle,
+        amountKz:     payment.amountKz,
+        proofUrl,
+        adminUrl: `${clientUrl}/platform-admin/payment-requests`,
+      })
+    }
+
+    return res.json(updated)
+  } catch (err) { next(err) }
+})
+
+// GET /api/subscriptions/payments — histórico de pagamentos do clube
+router.get('/payments', async (req: AuthRequest, res: Response) => {
+  const payments = await prisma.subscriptionPayment.findMany({
+    where:   { clubId: req.user!.clubId },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+  })
+  return res.json(payments)
+})
+
+// GET /api/subscriptions/payment/:id — detalhes de um pagamento específico
+router.get('/payment/:id', async (req: AuthRequest, res: Response) => {
+  const payment = await prisma.subscriptionPayment.findFirst({
+    where: { id: req.params.id, clubId: req.user!.clubId },
+  })
+  if (!payment) return res.status(404).json({ error: 'Pedido não encontrado' })
+  return res.json(payment)
 })
 
 export default router
