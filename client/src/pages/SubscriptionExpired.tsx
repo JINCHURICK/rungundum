@@ -15,7 +15,7 @@ export default function SubscriptionExpired() {
     toast.success('Sessão terminada')
   }
 
-  const isAdmin = user?.role === 'ADMIN' || user?.role === 'APP_ADMIN'
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'APP_ADMIN' || user?.role === 'TREASURER'
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">

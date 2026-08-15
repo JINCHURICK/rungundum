@@ -2,7 +2,7 @@ import { Router, Response, NextFunction } from 'express'
 import { z } from 'zod'
 import multer from 'multer'
 import { prisma } from '../lib/prisma'
-import { authenticate, requireRole, requirePlatformAdmin, AuthRequest } from '../middleware/auth'
+import { authenticate, requireRole, requirePlatformAdmin, requirePermission, AuthRequest } from '../middleware/auth'
 import { PLAN_LIMITS, PLAN_LABELS, PLAN_PRICES, getEffectiveLimits, type PlanKey } from '../lib/plans'
 import { sendUpgradeRequest, sendPaymentProofReceived, sendSubscriptionApproved, sendSubscriptionRejected } from '../services/email'
 import { uploadToCloudinary } from '../services/cloudinary'
@@ -272,7 +272,7 @@ async function generateInvoiceNumber(): Promise<string> {
 }
 
 // POST /api/subscriptions/payment — criar pedido de pagamento (gera fatura)
-router.post('/payment', requireRole('ADMIN'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/payment', requirePermission('SUBSCRIPTIONS'), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { planCode, billingCycle } = z.object({
       planCode:     z.string(),
@@ -311,7 +311,7 @@ router.post('/payment', requireRole('ADMIN'), async (req: AuthRequest, res: Resp
 })
 
 // POST /api/subscriptions/payment/:id/proof — upload comprovante
-router.post('/payment/:id/proof', requireRole('ADMIN'), upload.single('proof'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/payment/:id/proof', requirePermission('SUBSCRIPTIONS'), upload.single('proof'), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const payment = await prisma.subscriptionPayment.findFirst({
       where: { id: req.params.id, clubId: req.user!.clubId },
