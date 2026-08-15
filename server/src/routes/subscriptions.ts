@@ -340,6 +340,8 @@ router.post('/payment/:id/proof', requirePermission('SUBSCRIPTIONS'), upload.sin
     if (notifyEmail) {
       const club = await prisma.club.findUnique({ where: { id: payment.clubId }, select: { name: true } })
       const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5173'
+      // proofUrl é um path relativo (/uploads/...) — converter para URL absoluta para o email
+      const absoluteProofUrl = proofUrl.startsWith('http') ? proofUrl : `${clientUrl}${proofUrl}`
       await sendPaymentProofReceived({
         to: notifyEmail,
         clubName:     club?.name ?? payment.clubId,
@@ -347,7 +349,7 @@ router.post('/payment/:id/proof', requirePermission('SUBSCRIPTIONS'), upload.sin
         planCode:     payment.planCode,
         billingCycle: payment.billingCycle,
         amountKz:     payment.amountKz,
-        proofUrl,
+        proofUrl:     absoluteProofUrl,
         adminUrl: `${clientUrl}/platform-admin/payment-requests`,
       })
     }

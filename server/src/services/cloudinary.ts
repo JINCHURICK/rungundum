@@ -49,7 +49,7 @@ function ensureDir(dir: string) {
 }
 
 function saveLocally(buffer: Buffer, folder: string, detectedMime: string): string {
-  const ext = detectedMime === 'image/png' ? 'png' : detectedMime === 'image/gif' ? 'gif' : detectedMime === 'image/webp' ? 'webp' : 'jpg'
+  const ext = detectedMime === 'image/png' ? 'png' : detectedMime === 'image/gif' ? 'gif' : detectedMime === 'image/webp' ? 'webp' : detectedMime === 'application/pdf' ? 'pdf' : 'jpg'
   // Pasta normalizada e verificada dentro de UPLOADS_DIR
   const safeFolder = folder.replace(/\.\./g, '').replace(/[^a-zA-Z0-9/_-]/g, '')
   const dir = path.join(UPLOADS_DIR, safeFolder)
@@ -230,31 +230,10 @@ export async function uploadToCloudinary(buffer: Buffer, folder: string): Promis
   return _doCloudinaryUpload(buffer, folder, 'image', { transformation: [{ quality: 'auto', fetch_format: 'auto' }] })
 }
 
-// Para comprovantes de pagamento — aceita imagens e PDF
+// Para comprovantes de pagamento — aceita imagens e PDF, sempre guarda localmente.
+// Cloudinary raw resources retornam 401 de forma inconsistente nesta conta;
+// o Express serve /uploads directamente e é mais fiável.
 export async function uploadDocumentToCloudinary(buffer: Buffer, folder: string): Promise<string> {
   const detectedMime = validateDocumentBuffer(buffer)
-  const hasCloudinary = process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_KEY.trim() !== ''
-  if (!hasCloudinary) {
-    if (detectedMime === 'application/pdf') {
-      const safeFolder = folder.replace(/\.\./g, '').replace(/[^a-zA-Z0-9/_-]/g, '')
-      const dir = path.join(UPLOADS_DIR, safeFolder)
-      fs.mkdirSync(dir, { recursive: true })
-      const filename = `${Date.now()}.pdf`
-      fs.writeFileSync(path.join(dir, filename), buffer)
-      return `/uploads/${safeFolder}/${filename}`
-    }
-    return saveLocally(buffer, folder, detectedMime)
-  }
-  if (detectedMime === 'application/pdf') {
-    // resource_type raw + public_id com .pdf → URL /raw/upload/.../filename.pdf acessível directamente
-    return _doCloudinaryUpload(buffer, folder, 'raw', {
-      public_id: `${Date.now()}.pdf`,
-      access_mode: 'public',
-    })
-  }
-  // Imagens usam 'image' com optimização
-  return _doCloudinaryUpload(buffer, folder, 'image', {
-    transformation: [{ quality: 'auto', fetch_format: 'auto' }],
-    access_mode: 'public',
-  })
+  return saveLocally(buffer, folder, detectedMime)
 }
