@@ -245,6 +245,10 @@ export async function uploadDocumentToCloudinary(buffer: Buffer, folder: string)
     }
     return saveLocally(buffer, folder, detectedMime)
   }
-  // resource_type 'auto' aceita imagens e PDF no Cloudinary; access_mode public garante acesso sem auth
-  return _doCloudinaryUpload(buffer, folder, 'auto', { access_mode: 'public' })
+  if (detectedMime === 'application/pdf') {
+    // PDFs devem usar resource_type 'raw' → URL /raw/upload/ acessível directamente sem auth
+    return _doCloudinaryUpload(buffer, folder, 'raw', { access_mode: 'public' })
+  }
+  // Imagens usam 'image' com optimização
+  return _doCloudinaryUpload(buffer, folder, 'image', { transformation: [{ quality: 'auto', fetch_format: 'auto' }], access_mode: 'public' })
 }
