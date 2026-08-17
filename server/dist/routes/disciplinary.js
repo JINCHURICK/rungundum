@@ -7,6 +7,7 @@ const auth_1 = require("../middleware/auth");
 const sms_1 = require("../services/sms");
 const email_1 = require("../services/email");
 const treasury_1 = require("./treasury");
+const notificationMode_1 = require("../lib/notificationMode");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
 router.use((0, auth_1.requirePermission)('DISCIPLINARY'));
@@ -161,13 +162,14 @@ router.post('/suspensions', async (req, res) => {
         const clubName = member.club.name;
         const startStr = start.toLocaleDateString('pt-AO');
         const endStr = end.toLocaleDateString('pt-AO');
-        if (member.phone) {
+        const { sms: canSms, email: canEmail } = await (0, notificationMode_1.getNotificationMode)(req.user.clubId);
+        if (canSms && member.phone) {
             (0, sms_1.sendSuspensionSms)({
                 phone: member.phone, memberName, clubName,
                 reason: data.reason, startDate: startStr, endDate: endStr,
             }).catch(() => { });
         }
-        if (member.user?.email) {
+        if (canEmail && member.user?.email) {
             (0, email_1.sendSuspensionEmail)({
                 to: member.user.email, memberName, clubName,
                 reason: data.reason, startDate: startStr, endDate: endStr,
@@ -216,11 +218,14 @@ router.patch('/suspensions/:id/lift', async (req, res) => {
         include: { club: { select: { name: true } } },
     });
     if (liftedMember?.phone) {
-        (0, sms_1.sendSuspensionLiftedSms)({
-            phone: liftedMember.phone,
-            memberName: liftedMember.nickname ?? liftedMember.fullName,
-            clubName: liftedMember.club.name,
-        }).catch(() => { });
+        const { sms: canSms } = await (0, notificationMode_1.getNotificationMode)(suspension.clubId);
+        if (canSms) {
+            (0, sms_1.sendSuspensionLiftedSms)({
+                phone: liftedMember.phone,
+                memberName: liftedMember.nickname ?? liftedMember.fullName,
+                clubName: liftedMember.club.name,
+            }).catch(() => { });
+        }
     }
     return res.json(updated);
 });
@@ -278,10 +283,11 @@ router.post('/fines', async (req, res) => {
         });
         const memberName = member.nickname ?? member.fullName;
         const clubName = member.club.name;
-        if (member.phone) {
+        const { sms: canSms, email: canEmail } = await (0, notificationMode_1.getNotificationMode)(req.user.clubId);
+        if (canSms && member.phone) {
             (0, sms_1.sendFineSms)({ phone: member.phone, memberName, clubName, reason: data.reason, amount: data.amount }).catch(() => { });
         }
-        if (member.user?.email) {
+        if (canEmail && member.user?.email) {
             (0, email_1.sendFineEmail)({ to: member.user.email, memberName, clubName, reason: data.reason, amount: data.amount, notes: data.notes ?? null }).catch(() => { });
         }
         return res.status(201).json(fine);

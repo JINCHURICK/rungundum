@@ -180,6 +180,28 @@ router.patch('/clubs/:id/subscription', async (req, res) => {
         throw err;
     }
 });
+// PATCH /api/platform-admin/clubs/:id/notifications
+router.patch('/clubs/:id/notifications', async (req, res) => {
+    try {
+        const { notificationMode } = zod_1.z.object({
+            notificationMode: zod_1.z.enum(['BOTH', 'SMS_ONLY', 'EMAIL_ONLY', 'NONE']),
+        }).parse(req.body);
+        const club = await prisma_1.prisma.club.findUnique({ where: { id: req.params.id }, select: { defaultSettings: true } });
+        if (!club)
+            return res.status(404).json({ error: 'Clube não encontrado' });
+        const settings = (club.defaultSettings ?? {});
+        await prisma_1.prisma.club.update({
+            where: { id: req.params.id },
+            data: { defaultSettings: { ...settings, notificationMode } },
+        });
+        return res.json({ notificationMode });
+    }
+    catch (err) {
+        if (err instanceof zod_1.z.ZodError)
+            return res.status(400).json({ error: err.errors });
+        throw err;
+    }
+});
 // GET /api/platform-admin/subscription-requests
 router.get('/subscription-requests', async (req, res) => {
     const status = req.query.status ?? undefined;

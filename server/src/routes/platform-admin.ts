@@ -176,6 +176,28 @@ router.patch('/clubs/:id/subscription', async (req: AuthRequest, res: Response) 
   }
 })
 
+// PATCH /api/platform-admin/clubs/:id/notifications
+router.patch('/clubs/:id/notifications', async (req: AuthRequest, res: Response) => {
+  try {
+    const { notificationMode } = z.object({
+      notificationMode: z.enum(['BOTH', 'SMS_ONLY', 'EMAIL_ONLY', 'NONE']),
+    }).parse(req.body)
+
+    const club = await prisma.club.findUnique({ where: { id: req.params.id }, select: { defaultSettings: true } })
+    if (!club) return res.status(404).json({ error: 'Clube não encontrado' })
+
+    const settings = (club.defaultSettings ?? {}) as Record<string, any>
+    await prisma.club.update({
+      where: { id: req.params.id },
+      data: { defaultSettings: { ...settings, notificationMode } },
+    })
+    return res.json({ notificationMode })
+  } catch (err) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors })
+    throw err
+  }
+})
+
 // GET /api/platform-admin/subscription-requests
 router.get('/subscription-requests', async (req: AuthRequest, res: Response) => {
   const status = (req.query.status as string | undefined) ?? undefined

@@ -8,6 +8,7 @@ const email_1 = require("../services/email");
 const sms_1 = require("../services/sms");
 const treasury_1 = require("./treasury");
 const quotaAlerts_1 = require("../services/quotaAlerts");
+const notificationMode_1 = require("../lib/notificationMode");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
 // GET /api/quotas/alerts/config
@@ -233,10 +234,11 @@ router.post('/:quotaId/payments', (0, auth_1.requirePermission)('ALERTS_CONFIG')
             paidAt: result.payment.paidAt,
             createdById: req.user.userId,
         }).catch(() => { });
-        if (quota.member.user?.email) {
+        const { sms: canSms, email: canEmail } = await (0, notificationMode_1.getNotificationMode)(req.user.clubId);
+        if (canEmail && quota.member.user?.email) {
             (0, email_1.sendQuotaPaid)({ to: quota.member.user.email, memberName, clubName, year: quota.year, amount: data.amount }).catch(() => { });
         }
-        if (quota.member.phone) {
+        if (canSms && quota.member.phone) {
             (0, sms_1.sendQuotaPaidSms)({ phone: quota.member.phone, memberName, clubName, monthsPaid: data.monthsCount, amount: data.amount, year: quota.year }).catch(() => { });
         }
         return res.status(201).json(result);
@@ -265,18 +267,23 @@ router.post('/:id/remind', (0, auth_1.requirePermission)('ALERTS_CONFIG'), async
     }
     const memberName = quota.member.nickname ?? quota.member.fullName;
     const clubName = quota.member.club.name;
+    const { sms: canSms, email: canEmail } = await (0, notificationMode_1.getNotificationMode)(req.user.clubId);
     const sent = [];
-    if (quota.member.user?.email) {
+    if (canEmail && quota.member.user?.email) {
         const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5173';
         await (0, email_1.sendQuotaReminder)({ to: quota.member.user.email, memberName, clubName, year: quota.year, amount: quota.dueAmount, appUrl: clientUrl });
         sent.push('email');
     }
-    if (quota.member.phone) {
+    if (canSms && quota.member.phone) {
         await (0, sms_1.sendQuotaReminderSms)({ phone: quota.member.phone, memberName, clubName, year: quota.year, monthlyAmount: quota.dueAmount }).catch(() => { });
         sent.push('SMS');
     }
-    if (sent.length === 0)
-        return res.status(400).json({ error: 'O membro não tem email nem telemóvel configurado.' });
+    if (sent.length === 0) {
+        const hasContact = quota.member.user?.email || quota.member.phone;
+        if (!hasContact)
+            return res.status(400).json({ error: 'O membro não tem email nem telemóvel configurado.' });
+        return res.status(400).json({ error: 'As notificações estão desactivadas para este clube.' });
+    }
     return res.json({ message: `Lembrete enviado por ${sent.join(' e ')}.` });
 });
 // DELETE /api/quotas/:id

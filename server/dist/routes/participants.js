@@ -6,6 +6,7 @@ const prisma_1 = require("../lib/prisma");
 const auth_1 = require("../middleware/auth");
 const checklist_1 = require("../services/checklist");
 const email_1 = require("../services/email");
+const notificationMode_1 = require("../lib/notificationMode");
 const router = (0, express_1.Router)({ mergeParams: true });
 router.use(auth_1.authenticate);
 // GET /api/raids/:raidId/participants
@@ -183,15 +184,18 @@ router.post('/remind', (0, auth_1.requireRole)('ADMIN', 'CAPTAIN'), async (req, 
     });
     const confirmUrl = `${process.env.CLIENT_URL ?? 'http://localhost:5173'}/raids/${raid.id}`;
     const raidDate = raid.date.toLocaleDateString('pt-AO', { day: '2-digit', month: 'long', year: 'numeric' });
-    const toNotify = pending.filter((p) => p.member.user?.email);
-    await Promise.allSettled(toNotify.map((p) => (0, email_1.sendRaidReminder)({
-        to: p.member.user.email,
-        memberName: p.member.nickname ?? p.member.fullName,
-        raidTitle: raid.title,
-        raidDate,
-        clubName: raid.club.name,
-        confirmUrl,
-    })));
+    const { email: canEmail } = await (0, notificationMode_1.getNotificationMode)(req.user.clubId);
+    const toNotify = canEmail ? pending.filter((p) => p.member.user?.email) : [];
+    if (toNotify.length > 0) {
+        await Promise.allSettled(toNotify.map((p) => (0, email_1.sendRaidReminder)({
+            to: p.member.user.email,
+            memberName: p.member.nickname ?? p.member.fullName,
+            raidTitle: raid.title,
+            raidDate,
+            clubName: raid.club.name,
+            confirmUrl,
+        })));
+    }
     return res.json({ message: `${toNotify.length} lembrete(s) enviado(s)`, count: toNotify.length });
 });
 exports.default = router;

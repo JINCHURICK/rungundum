@@ -8,6 +8,7 @@ import { sendRaidPublished } from '../services/email'
 import { uploadToCloudinary } from '../services/cloudinary'
 import { awardLeaguePointsForRaid } from './leagues'
 import { createNotification } from '../services/notifications'
+import { getNotificationMode } from '../lib/notificationMode'
 
 const router = Router()
 router.use(authenticate)
@@ -293,19 +294,22 @@ router.patch('/:id/status', requireRole('ADMIN', 'CAPTAIN'), async (req: AuthReq
     const publicUrl = `${clientUrl}/public/${existing.publicToken}`
     const raidDate = existing.date.toLocaleDateString('pt-AO', { day: '2-digit', month: 'long', year: 'numeric' })
 
+    const { email: canEmail } = await getNotificationMode(existing.clubId)
     await Promise.allSettled([
-      ...participants
-        .filter((p) => p.member.user?.email)
-        .map((p) =>
-          sendRaidPublished({
-            to: p.member.user!.email!,
-            memberName: p.member.nickname ?? p.member.fullName,
-            raidTitle: existing.title,
-            raidDate,
-            clubName: (raid as any).club.name,
-            publicUrl,
-          })
-        ),
+      ...(canEmail
+        ? participants
+            .filter((p) => p.member.user?.email)
+            .map((p) =>
+              sendRaidPublished({
+                to: p.member.user!.email!,
+                memberName: p.member.nickname ?? p.member.fullName,
+                raidTitle: existing.title,
+                raidDate,
+                clubName: (raid as any).club.name,
+                publicUrl,
+              })
+            )
+        : []),
       ...participants
         .filter((p) => p.member.user?.id)
         .map((p) =>

@@ -13,6 +13,7 @@ const email_1 = require("../services/email");
 const cloudinary_1 = require("../services/cloudinary");
 const leagues_1 = require("./leagues");
 const notifications_1 = require("../services/notifications");
+const notificationMode_1 = require("../lib/notificationMode");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
 const upload = (0, multer_1.default)({ storage: multer_1.default.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -272,17 +273,20 @@ router.patch('/:id/status', (0, auth_1.requireRole)('ADMIN', 'CAPTAIN'), async (
         const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5173';
         const publicUrl = `${clientUrl}/public/${existing.publicToken}`;
         const raidDate = existing.date.toLocaleDateString('pt-AO', { day: '2-digit', month: 'long', year: 'numeric' });
+        const { email: canEmail } = await (0, notificationMode_1.getNotificationMode)(existing.clubId);
         await Promise.allSettled([
-            ...participants
-                .filter((p) => p.member.user?.email)
-                .map((p) => (0, email_1.sendRaidPublished)({
-                to: p.member.user.email,
-                memberName: p.member.nickname ?? p.member.fullName,
-                raidTitle: existing.title,
-                raidDate,
-                clubName: raid.club.name,
-                publicUrl,
-            })),
+            ...(canEmail
+                ? participants
+                    .filter((p) => p.member.user?.email)
+                    .map((p) => (0, email_1.sendRaidPublished)({
+                    to: p.member.user.email,
+                    memberName: p.member.nickname ?? p.member.fullName,
+                    raidTitle: existing.title,
+                    raidDate,
+                    clubName: raid.club.name,
+                    publicUrl,
+                }))
+                : []),
             ...participants
                 .filter((p) => p.member.user?.id)
                 .map((p) => (0, notifications_1.createNotification)({

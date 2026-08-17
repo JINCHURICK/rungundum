@@ -5,6 +5,7 @@ import { authenticate, requirePermission, requireRole, AuthRequest } from '../mi
 import { sendSuspensionSms, sendSuspensionLiftedSms, sendFineSms } from '../services/sms'
 import { sendFineEmail, sendSuspensionEmail } from '../services/email'
 import { createFineTransaction, deleteFineTransaction } from './treasury'
+import { getNotificationMode } from '../lib/notificationMode'
 
 const router = Router()
 router.use(authenticate)
@@ -171,13 +172,15 @@ router.post('/suspensions', async (req: AuthRequest, res: Response) => {
     const startStr   = start.toLocaleDateString('pt-AO')
     const endStr     = end.toLocaleDateString('pt-AO')
 
-    if (member.phone) {
+    const { sms: canSms, email: canEmail } = await getNotificationMode(req.user!.clubId)
+
+    if (canSms && member.phone) {
       sendSuspensionSms({
         phone: member.phone, memberName, clubName,
         reason: data.reason, startDate: startStr, endDate: endStr,
       }).catch(() => {})
     }
-    if (member.user?.email) {
+    if (canEmail && member.user?.email) {
       sendSuspensionEmail({
         to: member.user.email, memberName, clubName,
         reason: data.reason, startDate: startStr, endDate: endStr,
@@ -227,11 +230,14 @@ router.patch('/suspensions/:id/lift', async (req: AuthRequest, res: Response) =>
     include: { club: { select: { name: true } } },
   })
   if (liftedMember?.phone) {
-    sendSuspensionLiftedSms({
-      phone:      liftedMember.phone,
-      memberName: liftedMember.nickname ?? liftedMember.fullName,
-      clubName:   liftedMember.club.name,
-    }).catch(() => {})
+    const { sms: canSms } = await getNotificationMode(suspension.clubId)
+    if (canSms) {
+      sendSuspensionLiftedSms({
+        phone:      liftedMember.phone,
+        memberName: liftedMember.nickname ?? liftedMember.fullName,
+        clubName:   liftedMember.club.name,
+      }).catch(() => {})
+    }
   }
 
   return res.json(updated)
@@ -296,11 +302,12 @@ router.post('/fines', async (req: AuthRequest, res: Response) => {
 
     const memberName = member.nickname ?? member.fullName
     const clubName   = member.club.name
+    const { sms: canSms, email: canEmail } = await getNotificationMode(req.user!.clubId)
 
-    if (member.phone) {
+    if (canSms && member.phone) {
       sendFineSms({ phone: member.phone, memberName, clubName, reason: data.reason, amount: data.amount }).catch(() => {})
     }
-    if (member.user?.email) {
+    if (canEmail && member.user?.email) {
       sendFineEmail({ to: member.user.email, memberName, clubName, reason: data.reason, amount: data.amount, notes: data.notes ?? null }).catch(() => {})
     }
 

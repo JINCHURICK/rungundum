@@ -6,6 +6,7 @@ import { sendQuotaReminder, sendQuotaPaid } from '../services/email'
 import { sendQuotaReminderSms, sendQuotaPaidSms } from '../services/sms'
 import { createQuotaTransaction, deleteQuotaTransaction } from './treasury'
 import { getAlertConfig, saveAlertConfig, runQuotaAlerts, DEFAULT_ALERT_CONFIG } from '../services/quotaAlerts'
+import { getNotificationMode } from '../lib/notificationMode'
 
 const router = Router()
 router.use(authenticate)
@@ -259,10 +260,11 @@ router.post('/:quotaId/payments', requirePermission('ALERTS_CONFIG'), async (req
       createdById: req.user!.userId,
     }).catch(() => {})
 
-    if (quota.member.user?.email) {
+    const { sms: canSms, email: canEmail } = await getNotificationMode(req.user!.clubId)
+    if (canEmail && quota.member.user?.email) {
       sendQuotaPaid({ to: quota.member.user.email, memberName, clubName, year: quota.year, amount: data.amount }).catch(() => {})
     }
-    if (quota.member.phone) {
+    if (canSms && quota.member.phone) {
       sendQuotaPaidSms({ phone: quota.member.phone, memberName, clubName, monthsPaid: data.monthsCount, amount: data.amount, year: quota.year }).catch(() => {})
     }
 
@@ -292,20 +294,25 @@ router.post('/:id/remind', requirePermission('ALERTS_CONFIG'), async (req: AuthR
 
   const memberName = quota.member.nickname ?? quota.member.fullName
   const clubName   = quota.member.club.name
+  const { sms: canSms, email: canEmail } = await getNotificationMode(req.user!.clubId)
   const sent: string[] = []
 
-  if (quota.member.user?.email) {
+  if (canEmail && quota.member.user?.email) {
     const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5173'
     await sendQuotaReminder({ to: quota.member.user.email, memberName, clubName, year: quota.year, amount: quota.dueAmount, appUrl: clientUrl })
     sent.push('email')
   }
 
-  if (quota.member.phone) {
+  if (canSms && quota.member.phone) {
     await sendQuotaReminderSms({ phone: quota.member.phone, memberName, clubName, year: quota.year, monthlyAmount: quota.dueAmount }).catch(() => {})
     sent.push('SMS')
   }
 
-  if (sent.length === 0) return res.status(400).json({ error: 'O membro não tem email nem telemóvel configurado.' })
+  if (sent.length === 0) {
+    const hasContact = quota.member.user?.email || quota.member.phone
+    if (!hasContact) return res.status(400).json({ error: 'O membro não tem email nem telemóvel configurado.' })
+    return res.status(400).json({ error: 'As notificações estão desactivadas para este clube.' })
+  }
   return res.json({ message: `Lembrete enviado por ${sent.join(' e ')}.` })
 })
 

@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma'
 import { authenticate, requireRole, AuthRequest } from '../middleware/auth'
 import { getDefaultChecklist } from '../services/checklist'
 import { sendRaidReminder } from '../services/email'
+import { getNotificationMode } from '../lib/notificationMode'
 
 const router = Router({ mergeParams: true })
 router.use(authenticate)
@@ -204,20 +205,23 @@ router.post('/remind', requireRole('ADMIN', 'CAPTAIN'), async (req: AuthRequest,
 
   const confirmUrl = `${process.env.CLIENT_URL ?? 'http://localhost:5173'}/raids/${raid.id}`
   const raidDate = raid.date.toLocaleDateString('pt-AO', { day: '2-digit', month: 'long', year: 'numeric' })
-  const toNotify = pending.filter((p) => p.member.user?.email)
+  const { email: canEmail } = await getNotificationMode(req.user!.clubId)
+  const toNotify = canEmail ? pending.filter((p) => p.member.user?.email) : []
 
-  await Promise.allSettled(
-    toNotify.map((p) =>
-      sendRaidReminder({
-        to: p.member.user!.email,
-        memberName: p.member.nickname ?? p.member.fullName,
-        raidTitle: raid.title,
-        raidDate,
-        clubName: raid.club.name,
-        confirmUrl,
-      })
+  if (toNotify.length > 0) {
+    await Promise.allSettled(
+      toNotify.map((p) =>
+        sendRaidReminder({
+          to: p.member.user!.email,
+          memberName: p.member.nickname ?? p.member.fullName,
+          raidTitle: raid.title,
+          raidDate,
+          clubName: raid.club.name,
+          confirmUrl,
+        })
+      )
     )
-  )
+  }
 
   return res.json({ message: `${toNotify.length} lembrete(s) enviado(s)`, count: toNotify.length })
 })
