@@ -1,87 +1,58 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import toast from 'react-hot-toast'
+import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { Modal } from '@/components/ui/Modal'
-import { Input } from '@/components/ui/Input'
-import { Check, Users, ArrowRight, Crown, Zap, Flame, Globe } from 'lucide-react'
+import { Check, Users, ArrowRight, RefreshCw, AlertTriangle } from 'lucide-react'
 
-interface Plan {
-  id: string
-  code: string
-  name: string
-  priceMonthlyKz: number
-  priceAnnualKz: number
-  memberLimit: number | null
-  isActive: boolean
-}
+type PricingTier = { months: number; pricePerMonth: number; totalPrice: number; label: string }
+type Plan = { key: string; name: string; pricingTiers: PricingTier[]; maxMembers: number | null; active: boolean }
 
-interface SubscriptionData {
-  subscription: {
-    id: string
-    status: 'TRIAL' | 'ACTIVE' | 'PAST_DUE' | 'CANCELLED'
-    billingCycle: 'MONTHLY' | 'ANNUAL'
-    currentPeriodStart: string
-    currentPeriodEnd: string
-    paymentReference: string | null
-    plan: Plan
-  } | null
-  plans: Plan[]
-  activeMembers: number
-  memberLimit: number | null
-  usagePercent: number
-}
-
-const PLAN_ICONS: Record<string, React.ElementType> = {
-  arranque: Zap,
-  comitiva: Flame,
-  raid:     Crown,
-  nacional: Globe,
+interface MeData {
+  plan: string
+  planLabel: string
+  planStatus: string
+  trialEndsAt: string | null
+  planExpiresAt: string | null
+  limits: { maxMembers: number | null }
+  usage: { membersCount: number }
 }
 
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
-  TRIAL:    { label: 'Trial',     cls: 'bg-blue-100 text-blue-700'   },
-  ACTIVE:   { label: 'Activo',    cls: 'bg-green-100 text-green-700' },
-  PAST_DUE: { label: 'Em atraso', cls: 'bg-amber-100 text-amber-700' },
-  CANCELLED:{ label: 'Cancelado', cls: 'bg-gray-100 text-gray-500'   },
+  TRIAL:    { label: 'Trial',      cls: 'bg-blue-100 text-blue-700'   },
+  ACTIVE:   { label: 'Activo',     cls: 'bg-green-100 text-green-700' },
+  PAST_DUE: { label: 'Em atraso',  cls: 'bg-amber-100 text-amber-700' },
+  EXPIRED:  { label: 'Expirado',   cls: 'bg-red-100 text-red-600'     },
+  CANCELLED:{ label: 'Cancelado',  cls: 'bg-gray-100 text-gray-500'   },
 }
 
 function fmtKz(n: number) { return n.toLocaleString('pt-AO') + ' Kz' }
-function fmtDate(s: string) { return new Date(s).toLocaleDateString('pt-AO') }
+function fmtDate(s: string | null) {
+  if (!s) return '—'
+  return new Date(s).toLocaleDateString('pt-AO', { day: '2-digit', month: 'long', year: 'numeric' })
+}
+function daysLeft(s: string | null) {
+  if (!s) return null
+  const diff = Math.ceil((new Date(s).getTime() - Date.now()) / 86_400_000)
+  return diff
+}
 
 export default function Subscription() {
-  const qc = useQueryClient()
-  const [billing, setBilling]               = useState<'MONTHLY' | 'ANNUAL'>('MONTHLY')
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
-  const [targetPlan, setTargetPlan]         = useState<Plan | null>(null)
-  const [payRef, setPayRef]                 = useState('')
+  const navigate = useNavigate()
+  const [billing, setBilling] = useState<'MONTHLY' | 'ANNUAL'>('MONTHLY')
 
-  const { data, isLoading } = useQuery<SubscriptionData>({
-    queryKey: ['subscription-current'],
-    queryFn:  () => api.get('/subscriptions/current').then(r => r.data),
+  const { data: me, isLoading: loadingMe } = useQuery<MeData>({
+    queryKey: ['subscription-me'],
+    queryFn: () => api.get('/subscriptions/me').then(r => r.data),
   })
 
-  const switchMutation = useMutation({
-    mutationFn: (p: { planCode: string; billingCycle: string; paymentReference?: string }) =>
-      api.post('/subscriptions/switch-plan', p).then(r => r.data),
-    onSuccess: () => {
-      toast.success('Plano actualizado!')
-      qc.invalidateQueries({ queryKey: ['subscription-current'] })
-      setShowUpgradeModal(false)
-      setPayRef('')
-    },
-    onError: (e: any) => toast.error(e.response?.data?.error ?? 'Erro ao mudar plano'),
+  const { data: plans = [], isLoading: loadingPlans } = useQuery<Plan[]>({
+    queryKey: ['plans-active'],
+    queryFn: () => api.get('/plans/public').then(r => r.data.filter((p: Plan) => p.active !== false && p.key !== 'FREE')),
   })
 
-  function openUpgrade(plan: Plan) {
-    setTargetPlan(plan)
-    setPayRef('')
-    setShowUpgradeModal(true)
-  }
-
-  if (isLoading) {
+  if (loadingMe || loadingPlans) {
     return (
       <div className="flex justify-center py-20">
         <div className="animate-spin w-6 h-6 border-2 border-gray-200 rounded-full" style={{ borderTopColor: 'var(--accent)' }} />
@@ -89,24 +60,23 @@ export default function Subscription() {
     )
   }
 
-  const sub        = data?.subscription
-  const plans      = data?.plans ?? []
-  const current    = sub?.plan
-  const limit      = data?.memberLimit ?? null
-  const active     = data?.activeMembers ?? 0
-  const usage      = data?.usagePercent ?? 0
-  const status     = sub?.status ?? 'TRIAL'
-  const statusMeta = STATUS_LABELS[status] ?? STATUS_LABELS.TRIAL
+  const statusMeta = STATUS_LABELS[me?.planStatus ?? ''] ?? STATUS_LABELS.TRIAL
+  const activeMembers = me?.usage.membersCount ?? 0
+  const memberLimit = me?.limits.maxMembers ?? null
+  const usage = memberLimit ? Math.round((activeMembers / memberLimit) * 100) : 0
+  const days = daysLeft(me?.planExpiresAt ?? null)
+  const isExpired = me?.planStatus === 'EXPIRED' || (days !== null && days <= 0)
 
-  const annualSavings = targetPlan
-    ? Math.round(100 - (targetPlan.priceAnnualKz / (targetPlan.priceMonthlyKz * 12)) * 100)
-    : 0
+  function getTier(plan: Plan) {
+    const months = billing === 'ANNUAL' ? 12 : 1
+    return plan.pricingTiers.find(t => t.months === months) ?? plan.pricingTiers[0] ?? null
+  }
 
   return (
     <div className="fade-in space-y-5 max-w-3xl">
       <div>
         <h1 className="text-xl font-bold text-gray-900">Subscrição</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Gere o plano e limites do teu clube</p>
+        <p className="text-sm text-gray-500 mt-0.5">Plano e limites do teu clube</p>
       </div>
 
       {/* Estado actual */}
@@ -118,37 +88,41 @@ export default function Subscription() {
                 <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Plano actual</p>
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusMeta.cls}`}>{statusMeta.label}</span>
               </div>
-              <p className="text-2xl font-bold text-gray-900">{current?.name ?? '—'}</p>
-              {sub && (
+              <p className="text-2xl font-bold text-gray-900">{me?.planLabel ?? me?.plan ?? '—'}</p>
+              {me?.planExpiresAt && (
                 <p className="text-sm text-gray-400 mt-1">
-                  {sub.billingCycle === 'MONTHLY' ? 'Facturação mensal' : 'Facturação anual'} ·
-                  Válido até {fmtDate(sub.currentPeriodEnd)}
+                  {isExpired
+                    ? <span className="text-red-600 font-medium">Expirou em {fmtDate(me.planExpiresAt)}</span>
+                    : <>Válido até {fmtDate(me.planExpiresAt)} {days !== null && days <= 30 && <span className="text-amber-600 font-medium">· {days} dia{days !== 1 ? 's' : ''}</span>}</>
+                  }
                 </p>
               )}
-              {sub?.paymentReference && (
-                <p className="text-xs text-gray-400 mt-0.5">Ref. pagamento: {sub.paymentReference}</p>
+              {me?.trialEndsAt && me.planStatus === 'TRIAL' && (
+                <p className="text-sm text-amber-600 mt-1">Trial termina em {fmtDate(me.trialEndsAt)}</p>
               )}
             </div>
-            <div className="text-right">
-              {current && (
-                <>
-                  <p className="text-2xl font-bold" style={{ color: 'var(--accent)' }}>
-                    {fmtKz(sub?.billingCycle === 'ANNUAL' ? current.priceAnnualKz : current.priceMonthlyKz)}
-                  </p>
-                  <p className="text-xs text-gray-400">{sub?.billingCycle === 'ANNUAL' ? '/ano' : '/mês'}</p>
-                </>
-              )}
-            </div>
+
+            {isExpired ? (
+              <Button onClick={() => navigate('/subscription/pay')} className="flex items-center gap-2">
+                <RefreshCw size={14} /> Renovar subscrição
+              </Button>
+            ) : (
+              days !== null && days <= 30 && (
+                <Button variant="secondary" onClick={() => navigate('/subscription/pay')} className="flex items-center gap-2">
+                  <RefreshCw size={14} /> Renovar antecipadamente
+                </Button>
+              )
+            )}
           </div>
 
-          {/* Barra de uso */}
+          {/* Barra de membros */}
           <div className="bg-gray-50 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
                 <Users size={14} /> Membros activos
               </div>
               <span className="text-sm font-bold text-gray-900">
-                {active} / {limit !== null ? limit : '∞'}
+                {activeMembers} / {memberLimit !== null ? memberLimit : '∞'}
               </span>
             </div>
             <div className="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden">
@@ -158,17 +132,25 @@ export default function Subscription() {
               />
             </div>
             <p className="text-xs text-gray-400 mt-1.5">
-              {limit !== null
-                ? `${Math.max(0, limit - active)} lugar${limit - active !== 1 ? 'es' : ''} disponível${limit - active !== 1 ? 'eis' : ''}`
-                : 'Membros ilimitados neste plano'
-              }
+              {memberLimit !== null
+                ? `${Math.max(0, memberLimit - activeMembers)} lugar${memberLimit - activeMembers !== 1 ? 'es' : ''} disponível${memberLimit - activeMembers !== 1 ? 'eis' : ''}`
+                : 'Membros ilimitados neste plano'}
             </p>
-            {usage >= 80 && limit !== null && (
+            {usage >= 80 && memberLimit !== null && (
               <p className="text-xs text-amber-600 font-medium mt-1">
-                ⚠️ Estás a {usage}% da capacidade. Considera fazer upgrade para continuar a crescer.
+                ⚠️ Estás a {usage}% da capacidade. Considera fazer upgrade.
               </p>
             )}
           </div>
+
+          {isExpired && (
+            <div className="mt-4 flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl p-3">
+              <AlertTriangle size={16} className="text-red-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-red-700">
+                A subscrição expirou. Renova para recuperar o acesso completo ao sistema.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -183,7 +165,7 @@ export default function Subscription() {
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${billing === b ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
             >
               {b === 'MONTHLY' ? 'Mensal' : (
-                <>Anual <span className="text-green-600 bg-green-100 px-1.5 py-0.5 rounded-full">2 meses grátis</span></>
+                <>Anual <span className="text-green-600 bg-green-100 px-1.5 py-0.5 rounded-full">~15% poupança</span></>
               )}
             </button>
           ))}
@@ -191,122 +173,72 @@ export default function Subscription() {
       </div>
 
       {/* Cards dos planos */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {plans.map(plan => {
-          const isCurrent = current?.code === plan.code
-          const isPopular = plan.code === 'comitiva'
-          const price     = billing === 'ANNUAL' ? plan.priceAnnualKz : plan.priceMonthlyKz
-          const savings   = Math.round(100 - (plan.priceAnnualKz / (plan.priceMonthlyKz * 12)) * 100)
-          const Icon      = PLAN_ICONS[plan.code] ?? Zap
+      {plans.length === 0 ? (
+        <p className="text-sm text-gray-400 text-center py-8">Nenhum plano disponível de momento.</p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {plans.map(plan => {
+            const isCurrent = me?.plan?.toUpperCase() === plan.key?.toUpperCase()
+            const tier = getTier(plan)
+            const price = tier?.totalPrice ?? 0
+            const pricePerMonth = tier?.pricePerMonth ?? 0
 
-          return (
-            <div
-              key={plan.code}
-              className={`rounded-2xl border-2 p-5 flex flex-col gap-3 transition-all ${
-                isCurrent
-                  ? 'border-red-500 bg-red-50'
-                  : isPopular ? 'border-gray-300 bg-white shadow-sm' : 'border-gray-200 bg-white'
-              }`}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2">
-                  <div className={`p-1.5 rounded-lg ${isCurrent ? 'bg-red-100' : 'bg-gray-100'}`}>
-                    <Icon size={15} className={isCurrent ? 'text-red-600' : 'text-gray-600'} />
-                  </div>
+            return (
+              <div
+                key={plan.key}
+                className={`rounded-2xl border-2 p-5 flex flex-col gap-3 transition-all ${
+                  isCurrent ? 'border-red-500 bg-red-50' : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-start justify-between">
                   <div>
-                    <p className="font-semibold text-gray-900 text-sm">{plan.name}</p>
-                    <p className="text-xs text-gray-400">
-                      {plan.memberLimit !== null ? `Até ${plan.memberLimit} membros` : 'Ilimitado'}
+                    <p className="font-semibold text-gray-900">{plan.name}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {plan.maxMembers !== null ? `Até ${plan.maxMembers} membros` : 'Membros ilimitados'}
                     </p>
                   </div>
+                  {isCurrent && (
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Actual</span>
+                  )}
                 </div>
-                {isPopular && !isCurrent && (
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Popular</span>
-                )}
-                {isCurrent && (
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Actual</span>
+
+                <div>
+                  {tier ? (
+                    <>
+                      <p className="text-xl font-bold text-gray-900">{fmtKz(price)}</p>
+                      {billing === 'ANNUAL'
+                        ? <p className="text-xs text-gray-400">/ano · {fmtKz(pricePerMonth)}/mês</p>
+                        : <p className="text-xs text-gray-400">/mês</p>
+                      }
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-400">Preço não configurado</p>
+                  )}
+                </div>
+
+                {isCurrent ? (
+                  <div className="flex items-center gap-1.5 text-xs text-green-600 font-medium">
+                    <Check size={13} /> Plano actual
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => navigate('/subscription/pay')}
+                    className="w-full mt-auto"
+                  >
+                    Solicitar upgrade <ArrowRight size={13} />
+                  </Button>
                 )}
               </div>
+            )
+          })}
+        </div>
+      )}
 
-              <div>
-                <p className="text-xl font-bold text-gray-900">{fmtKz(price)}</p>
-                {billing === 'ANNUAL'
-                  ? <p className="text-xs text-gray-400">/ano · {fmtKz(Math.round(price / 12))}/mês <span className="text-green-600">(-{savings}%)</span></p>
-                  : <p className="text-xs text-gray-400">/mês</p>
-                }
-              </div>
-
-              {isCurrent ? (
-                <div className="flex items-center gap-1.5 text-xs text-green-600 font-medium">
-                  <Check size={13} /> Plano actual
-                </div>
-              ) : (
-                <Button
-                  size="sm"
-                  variant={isPopular ? 'primary' : 'secondary'}
-                  onClick={() => openUpgrade(plan)}
-                  className="w-full mt-auto"
-                >
-                  {plan.priceMonthlyKz > (current?.priceMonthlyKz ?? 0) ? 'Fazer upgrade' : 'Mudar plano'}
-                  <ArrowRight size={13} />
-                </Button>
-              )}
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Modal de confirmação */}
-      <Modal open={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} title={`Mudar para ${targetPlan?.name ?? ''}`}>
-        {targetPlan && (
-          <div className="space-y-4">
-            <div className="bg-gray-50 rounded-xl p-4 space-y-1">
-              <p className="text-sm font-semibold text-gray-700">{targetPlan.name}</p>
-              <p className="text-xs text-gray-500">
-                {targetPlan.memberLimit !== null ? `Até ${targetPlan.memberLimit} membros activos` : 'Membros ilimitados'}
-              </p>
-              <p className="text-lg font-bold text-gray-900">
-                {fmtKz(billing === 'ANNUAL' ? targetPlan.priceAnnualKz : targetPlan.priceMonthlyKz)}
-                <span className="text-sm font-normal text-gray-400"> {billing === 'ANNUAL' ? '/ano' : '/mês'}</span>
-              </p>
-              {billing === 'ANNUAL' && (
-                <p className="text-xs text-green-600">Poupas {annualSavings}% em relação ao mensal</p>
-              )}
-            </div>
-
-            <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
-              {(['MONTHLY', 'ANNUAL'] as const).map(b => (
-                <button key={b} onClick={() => setBilling(b)}
-                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${billing === b ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>
-                  {b === 'MONTHLY' ? 'Mensal' : 'Anual'}
-                </button>
-              ))}
-            </div>
-
-            <Input
-              label="Referência de pagamento (opcional)"
-              placeholder="Ex: TRF2025-001, Multicaixa #123..."
-              value={payRef}
-              onChange={e => setPayRef(e.target.value)}
-            />
-
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
-              <p className="font-semibold mb-1">Como funciona</p>
-              <p>Efectua a transferência bancária ou pagamento Multicaixa e indica a referência. O administrador confirmará o pagamento e activará o plano.</p>
-            </div>
-
-            <div className="flex gap-3 justify-end pt-1">
-              <Button variant="secondary" onClick={() => setShowUpgradeModal(false)}>Cancelar</Button>
-              <Button
-                onClick={() => switchMutation.mutate({ planCode: targetPlan.code, billingCycle: billing, ...(payRef && { paymentReference: payRef }) })}
-                loading={switchMutation.isPending}
-              >
-                Confirmar mudança
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
+      <p className="text-xs text-gray-400 text-center pb-2">
+        Para renovar ou mudar de plano, efectua uma transferência bancária e envia o comprovante. O acesso é activado após confirmação pela equipa Rungundum.
+      </p>
     </div>
   )
 }
