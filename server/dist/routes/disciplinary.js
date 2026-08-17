@@ -6,6 +6,7 @@ const prisma_1 = require("../lib/prisma");
 const auth_1 = require("../middleware/auth");
 const sms_1 = require("../services/sms");
 const email_1 = require("../services/email");
+const treasury_1 = require("./treasury");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
 router.use((0, auth_1.requirePermission)('DISCIPLINARY'));
@@ -299,14 +300,26 @@ router.patch('/fines/:id/pay', async (req, res) => {
         return res.status(404).json({ error: 'Multa não encontrada' });
     if (fine.status === 'PAID')
         return res.status(400).json({ error: 'Multa já paga' });
+    const paidAt = new Date();
     const updated = await prisma_1.prisma.fine.update({
         where: { id: fine.id },
-        data: { status: 'PAID', paidAt: new Date() },
+        data: { status: 'PAID', paidAt },
         include: {
             member: { select: memberSelect },
             process: { select: { id: true, title: true } },
         },
     });
+    // Entrada automática na tesouraria
+    (0, treasury_1.createFineTransaction)({
+        clubId: fine.clubId,
+        memberId: fine.memberId,
+        memberName: updated.member.nickname ?? updated.member.fullName,
+        amount: fine.amount,
+        reason: fine.reason,
+        fineId: fine.id,
+        paidAt,
+        createdById: req.user.userId,
+    }).catch(err => console.error('[treasury] falha ao criar transacção de multa:', err));
     return res.json(updated);
 });
 router.patch('/fines/:id/cancel', async (req, res) => {
@@ -323,6 +336,8 @@ router.patch('/fines/:id/cancel', async (req, res) => {
             process: { select: { id: true, title: true } },
         },
     });
+    // Remover entrada da tesouraria se a multa já tinha sido paga e entretanto cancelada
+    (0, treasury_1.deleteFineTransaction)(fine.id, fine.clubId).catch(err => console.error('[treasury] falha ao remover transacção de multa:', err));
     return res.json(updated);
 });
 router.delete('/fines/:id', (0, auth_1.requireRole)('ADMIN'), async (req, res) => {

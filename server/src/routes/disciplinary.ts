@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma'
 import { authenticate, requirePermission, requireRole, AuthRequest } from '../middleware/auth'
 import { sendSuspensionSms, sendSuspensionLiftedSms, sendFineSms } from '../services/sms'
 import { sendFineEmail, sendSuspensionEmail } from '../services/email'
+import { createFineTransaction, deleteFineTransaction } from './treasury'
 
 const router = Router()
 router.use(authenticate)
@@ -317,14 +318,28 @@ router.patch('/fines/:id/pay', async (req: AuthRequest, res: Response) => {
   if (!fine) return res.status(404).json({ error: 'Multa não encontrada' })
   if (fine.status === 'PAID') return res.status(400).json({ error: 'Multa já paga' })
 
+  const paidAt = new Date()
   const updated = await prisma.fine.update({
     where: { id: fine.id },
-    data: { status: 'PAID', paidAt: new Date() },
+    data: { status: 'PAID', paidAt },
     include: {
       member: { select: memberSelect },
       process: { select: { id: true, title: true } },
     },
   })
+
+  // Entrada automática na tesouraria
+  createFineTransaction({
+    clubId:     fine.clubId,
+    memberId:   fine.memberId,
+    memberName: updated.member.nickname ?? updated.member.fullName,
+    amount:     fine.amount,
+    reason:     fine.reason,
+    fineId:     fine.id,
+    paidAt,
+    createdById: req.user!.userId,
+  }).catch(err => console.error('[treasury] falha ao criar transacção de multa:', err))
+
   return res.json(updated)
 })
 
@@ -342,6 +357,12 @@ router.patch('/fines/:id/cancel', async (req: AuthRequest, res: Response) => {
       process: { select: { id: true, title: true } },
     },
   })
+
+  // Remover entrada da tesouraria se a multa já tinha sido paga e entretanto cancelada
+  deleteFineTransaction(fine.id, fine.clubId).catch(err =>
+    console.error('[treasury] falha ao remover transacção de multa:', err)
+  )
+
   return res.json(updated)
 })
 
