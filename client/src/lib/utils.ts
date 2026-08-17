@@ -39,6 +39,7 @@ export function getRoleLabel(role: string) {
 export function getUserRoleLabel(role: string | undefined | null) {
   return {
     ADMIN:          'Presidente',
+    APP_ADMIN:      'Administrador de App',
     VICE_PRESIDENT: 'Vice-Presidente',
     TREASURER:      'Tesoureiro',
     SECRETARY:      'Secretário',

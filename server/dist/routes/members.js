@@ -33,7 +33,7 @@ const memberSchema = zod_1.z.object({
     notes: zod_1.z.string().optional(),
     email: zod_1.z.string().email().optional(),
     password: zod_1.z.string().min(8).optional(),
-    role: zod_1.z.enum(['ADMIN', 'VICE_PRESIDENT', 'TREASURER', 'SECRETARY', 'PR', 'DISCIPLINA', 'CAPTAIN', 'MEMBER', 'GUEST']).optional(),
+    role: zod_1.z.enum(['ADMIN', 'APP_ADMIN', 'VICE_PRESIDENT', 'TREASURER', 'SECRETARY', 'PR', 'DISCIPLINA', 'CAPTAIN', 'MEMBER', 'GUEST']).optional(),
 });
 const MEMBER_STATUS_VALUES = ['ACTIVE', 'INACTIVE', 'SUSPENDED', 'GUEST'];
 // GET /api/members

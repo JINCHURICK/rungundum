@@ -31,7 +31,7 @@ const memberSchema = z.object({
   notes: z.string().optional(),
   email: z.string().email().optional(),
   password: z.string().min(8).optional(),
-  role: z.enum(['ADMIN', 'VICE_PRESIDENT', 'TREASURER', 'SECRETARY', 'PR', 'DISCIPLINA', 'CAPTAIN', 'MEMBER', 'GUEST']).optional(),
+  role: z.enum(['ADMIN', 'APP_ADMIN', 'VICE_PRESIDENT', 'TREASURER', 'SECRETARY', 'PR', 'DISCIPLINA', 'CAPTAIN', 'MEMBER', 'GUEST']).optional(),
 })
 
 const MEMBER_STATUS_VALUES = ['ACTIVE', 'INACTIVE', 'SUSPENDED', 'GUEST'] as const

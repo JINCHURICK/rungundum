@@ -275,6 +275,7 @@ export default function MembersList() {
                 <option value="DISCIPLINA">Disciplina</option>
                 <option value="VICE_PRESIDENT">Vice-Presidente</option>
                 <option value="ADMIN">Presidente</option>
+                <option value="APP_ADMIN">Administrador de App</option>
                 <option value="GUEST">Convidado</option>
               </select>
             </div>

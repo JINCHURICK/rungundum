@@ -36,7 +36,9 @@ const MEMBER_STATUS_LABELS: Record<string, string> = {
   ACTIVE: 'Activo', INACTIVE: 'Inactivo', SUSPENDED: 'Suspenso', GUEST: 'Convidado',
 }
 const ROLE_LABELS: Record<string, string> = {
-  ADMIN: 'Administrador', CAPTAIN: 'Capitão', MEMBER: 'Membro', GUEST: 'Convidado',
+  ADMIN: 'Administrador', APP_ADMIN: 'Adm. App', CAPTAIN: 'Capitão',
+  VICE_PRESIDENT: 'Vice-Presidente', TREASURER: 'Tesoureiro', SECRETARY: 'Secretário',
+  PR: 'Rel. Públicas', DISCIPLINA: 'Disciplina', MEMBER: 'Membro', GUEST: 'Convidado',
 }
 
 export default function PlatformClubDetail() {

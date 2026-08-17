@@ -74,7 +74,7 @@ export default function MemberDetail() {
     emergencyContact: z.string().optional(),
     emergencyPhone: z.string().optional(),
     status: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED', 'GUEST']),
-    role: z.enum(['ADMIN', 'VICE_PRESIDENT', 'TREASURER', 'SECRETARY', 'PR', 'DISCIPLINA', 'CAPTAIN', 'MEMBER', 'GUEST']).optional(),
+    role: z.enum(['ADMIN', 'APP_ADMIN', 'VICE_PRESIDENT', 'TREASURER', 'SECRETARY', 'PR', 'DISCIPLINA', 'CAPTAIN', 'MEMBER', 'GUEST']).optional(),
     notes: z.string().optional(),
   })
   type EditData = z.infer<typeof editSchema>
@@ -536,6 +536,7 @@ export default function MemberDetail() {
                     <option value="DISCIPLINA">Disciplina</option>
                     <option value="VICE_PRESIDENT">Vice-Presidente</option>
                     <option value="ADMIN">Presidente</option>
+                    <option value="APP_ADMIN">Administrador de App</option>
                     <option value="GUEST">Convidado</option>
                   </select>
                 </div>

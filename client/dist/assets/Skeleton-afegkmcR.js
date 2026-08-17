@@ -1,1 +1,0 @@
-import{j as e}from"./vendor-query-QJ42__W-.js";import{d as o}from"./index-h5UHRCtq.js";function a({className:r}){return e.jsx("div",{className:o("animate-pulse bg-gray-200 rounded-lg",r)})}export{a as S};
