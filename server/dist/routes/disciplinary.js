@@ -5,6 +5,7 @@ const zod_1 = require("zod");
 const prisma_1 = require("../lib/prisma");
 const auth_1 = require("../middleware/auth");
 const sms_1 = require("../services/sms");
+const email_1 = require("../services/email");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
 router.use((0, auth_1.requirePermission)('DISCIPLINARY'));
@@ -126,7 +127,7 @@ router.post('/suspensions', async (req, res) => {
         const data = schema.parse(req.body);
         const member = await prisma_1.prisma.member.findFirst({
             where: { id: data.memberId, clubId: req.user.clubId },
-            include: { club: { select: { name: true } } },
+            include: { club: { select: { name: true } }, user: { select: { email: true } } },
         });
         if (!member)
             return res.status(404).json({ error: 'Membro não encontrado' });
@@ -155,14 +156,21 @@ router.post('/suspensions', async (req, res) => {
         if (start <= now && end >= now) {
             await prisma_1.prisma.member.update({ where: { id: data.memberId }, data: { status: 'SUSPENDED' } });
         }
-        // SMS de notificação
+        const memberName = member.nickname ?? member.fullName;
+        const clubName = member.club.name;
+        const startStr = start.toLocaleDateString('pt-AO');
+        const endStr = end.toLocaleDateString('pt-AO');
         if (member.phone) {
             (0, sms_1.sendSuspensionSms)({
-                phone: member.phone,
-                memberName: member.nickname ?? member.fullName,
-                clubName: member.club.name,
-                reason: data.reason,
-                endDate: end.toLocaleDateString('pt-AO'),
+                phone: member.phone, memberName, clubName,
+                reason: data.reason, startDate: startStr, endDate: endStr,
+            }).catch(() => { });
+        }
+        if (member.user?.email) {
+            (0, email_1.sendSuspensionEmail)({
+                to: member.user.email, memberName, clubName,
+                reason: data.reason, startDate: startStr, endDate: endStr,
+                notes: data.notes ?? null,
             }).catch(() => { });
         }
         return res.status(201).json(suspension);
@@ -201,6 +209,18 @@ router.patch('/suspensions/:id/lift', async (req, res) => {
     if (otherActive === 0) {
         await prisma_1.prisma.member.update({ where: { id: suspension.memberId }, data: { status: 'ACTIVE' } });
     }
+    // SMS de levantamento
+    const liftedMember = await prisma_1.prisma.member.findUnique({
+        where: { id: suspension.memberId },
+        include: { club: { select: { name: true } } },
+    });
+    if (liftedMember?.phone) {
+        (0, sms_1.sendSuspensionLiftedSms)({
+            phone: liftedMember.phone,
+            memberName: liftedMember.nickname ?? liftedMember.fullName,
+            clubName: liftedMember.club.name,
+        }).catch(() => { });
+    }
     return res.json(updated);
 });
 router.delete('/suspensions/:id', (0, auth_1.requireRole)('ADMIN'), async (req, res) => {
@@ -236,7 +256,7 @@ router.post('/fines', async (req, res) => {
         const data = schema.parse(req.body);
         const member = await prisma_1.prisma.member.findFirst({
             where: { id: data.memberId, clubId: req.user.clubId },
-            include: { club: { select: { name: true } } },
+            include: { club: { select: { name: true } }, user: { select: { email: true } } },
         });
         if (!member)
             return res.status(404).json({ error: 'Membro não encontrado' });
@@ -255,15 +275,13 @@ router.post('/fines', async (req, res) => {
                 process: { select: { id: true, title: true } },
             },
         });
-        // SMS de notificação
+        const memberName = member.nickname ?? member.fullName;
+        const clubName = member.club.name;
         if (member.phone) {
-            (0, sms_1.sendFineSms)({
-                phone: member.phone,
-                memberName: member.nickname ?? member.fullName,
-                clubName: member.club.name,
-                reason: data.reason,
-                amount: data.amount,
-            }).catch(() => { });
+            (0, sms_1.sendFineSms)({ phone: member.phone, memberName, clubName, reason: data.reason, amount: data.amount }).catch(() => { });
+        }
+        if (member.user?.email) {
+            (0, email_1.sendFineEmail)({ to: member.user.email, memberName, clubName, reason: data.reason, amount: data.amount, notes: data.notes ?? null }).catch(() => { });
         }
         return res.status(201).json(fine);
     }

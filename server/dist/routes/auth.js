@@ -70,7 +70,7 @@ const registerSchema = zod_1.z.object({
     email: zod_1.z.string().email(),
     password: zod_1.z.string().min(8),
     fullName: zod_1.z.string().min(2),
-    role: zod_1.z.enum(['ADMIN', 'APP_ADMIN']).default('ADMIN'),
+    role: zod_1.z.literal('ADMIN').default('ADMIN'),
 });
 const loginSchema = zod_1.z.object({
     email: zod_1.z.string().email(),

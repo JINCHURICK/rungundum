@@ -4,24 +4,11 @@ const express_1 = require("express");
 const prisma_1 = require("../lib/prisma");
 const plan_cache_1 = require("../lib/plan-cache");
 const router = (0, express_1.Router)();
-const DEFAULT_PLAN_CONFIGS = [
-    {
-        key: 'PRO', name: 'Motard',
-        description: 'Plataforma completa de gestão para moto clubes angolanos',
-        currency: 'Kz', contactOnly: false, highlight: true,
-        maxMembers: null, active: true, displayOrder: 0,
-        features: ['Membros ilimitados', 'Raids ilimitados', 'Gestão de quotas', 'Notificações por email', 'Plano de contingência', 'Estatísticas e CSV'],
-        pricingTiers: [
-            { months: 1, pricePerMonth: 12000, totalPrice: 12000, label: 'Mensal' },
-            { months: 12, pricePerMonth: 9500, totalPrice: 114000, label: 'Anual' },
-        ],
-    },
-];
-// GET /api/plans/public — reads from file cache (no Prisma); falls back to defaults
+// GET /api/plans/public — reads from file cache (no Prisma); empty if not configured
 // File cache is written by PUT /api/platform-admin/plan-configs
 router.get('/public', (_req, res) => {
     const cached = (0, plan_cache_1.readPlanCache)();
-    const configs = (cached && cached.length > 0) ? cached : DEFAULT_PLAN_CONFIGS;
+    const configs = cached ?? [];
     return res.json(configs
         .filter((c) => c.active !== false)
         .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)));

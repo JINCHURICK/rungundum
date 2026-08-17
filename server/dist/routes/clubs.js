@@ -59,20 +59,30 @@ router.patch('/me', (0, auth_1.requireRole)('ADMIN'), async (req, res) => {
     }
 });
 // POST /api/clubs/me/logo
-router.post('/me/logo', (0, auth_1.requireRole)('ADMIN'), upload.single('logo'), async (req, res) => {
-    if (!req.file)
-        return res.status(400).json({ error: 'Ficheiro em falta' });
-    const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${req.user.clubId}/logo`);
-    const club = await prisma_1.prisma.club.update({ where: { id: req.user.clubId }, data: { logoUrl: url } });
-    return res.json({ logoUrl: club.logoUrl });
+router.post('/me/logo', (0, auth_1.requireRole)('ADMIN'), upload.single('logo'), async (req, res, next) => {
+    try {
+        if (!req.file)
+            return res.status(400).json({ error: 'Ficheiro em falta' });
+        const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${req.user.clubId}/logo`);
+        const club = await prisma_1.prisma.club.update({ where: { id: req.user.clubId }, data: { logoUrl: url } });
+        return res.json({ logoUrl: club.logoUrl });
+    }
+    catch (err) {
+        next(err);
+    }
 });
 // POST /api/clubs/me/second-logo
-router.post('/me/second-logo', (0, auth_1.requireRole)('ADMIN'), upload.single('logo'), async (req, res) => {
-    if (!req.file)
-        return res.status(400).json({ error: 'Ficheiro em falta' });
-    const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${req.user.clubId}/second-logo`);
-    const club = await prisma_1.prisma.club.update({ where: { id: req.user.clubId }, data: { secondLogoUrl: url } });
-    return res.json({ secondLogoUrl: club.secondLogoUrl });
+router.post('/me/second-logo', (0, auth_1.requireRole)('ADMIN'), upload.single('logo'), async (req, res, next) => {
+    try {
+        if (!req.file)
+            return res.status(400).json({ error: 'Ficheiro em falta' });
+        const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${req.user.clubId}/second-logo`);
+        const club = await prisma_1.prisma.club.update({ where: { id: req.user.clubId }, data: { secondLogoUrl: url } });
+        return res.json({ secondLogoUrl: club.secondLogoUrl });
+    }
+    catch (err) {
+        next(err);
+    }
 });
 // GET /api/clubs/me/emergency-contacts
 router.get('/me/emergency-contacts', async (req, res) => {
@@ -164,15 +174,20 @@ router.delete('/me/hand-signals/:id', (0, auth_1.requireRole)('ADMIN', 'CAPTAIN'
     return res.json({ message: 'Sinal eliminado' });
 });
 // POST /api/clubs/me/hand-signals/:id/image
-router.post('/me/hand-signals/:id/image', (0, auth_1.requireRole)('ADMIN', 'CAPTAIN'), upload.single('image'), async (req, res) => {
-    if (!req.file)
-        return res.status(400).json({ error: 'Ficheiro em falta' });
-    const signal = await prisma_1.prisma.handSignal.findFirst({ where: { id: req.params.id, clubId: req.user.clubId } });
-    if (!signal)
-        return res.status(404).json({ error: 'Sinal não encontrado' });
-    const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${req.user.clubId}/hand-signals/${req.params.id}`);
-    const updated = await prisma_1.prisma.handSignal.update({ where: { id: req.params.id }, data: { imageUrl: url } });
-    return res.json({ imageUrl: updated.imageUrl });
+router.post('/me/hand-signals/:id/image', (0, auth_1.requireRole)('ADMIN', 'CAPTAIN'), upload.single('image'), async (req, res, next) => {
+    try {
+        if (!req.file)
+            return res.status(400).json({ error: 'Ficheiro em falta' });
+        const signal = await prisma_1.prisma.handSignal.findFirst({ where: { id: req.params.id, clubId: req.user.clubId } });
+        if (!signal)
+            return res.status(404).json({ error: 'Sinal não encontrado' });
+        const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${req.user.clubId}/hand-signals/${req.params.id}`);
+        const updated = await prisma_1.prisma.handSignal.update({ where: { id: req.params.id }, data: { imageUrl: url } });
+        return res.json({ imageUrl: updated.imageUrl });
+    }
+    catch (err) {
+        next(err);
+    }
 });
 // PUT /api/clubs/me/hand-signals/reorder — actualizar ordem de vários sinais
 router.put('/me/hand-signals/reorder', (0, auth_1.requireRole)('ADMIN', 'CAPTAIN'), async (req, res) => {

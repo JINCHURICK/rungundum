@@ -89,22 +89,29 @@ export async function sendQuotaPaidSms(p: {
 }
 
 export async function sendSuspensionSms(p: {
-  phone: string; memberName: string; clubName: string; reason: string; endDate: string
+  phone: string; memberName: string; clubName: string; reason: string; startDate: string; endDate: string
 }) {
   await send([p.phone],
-    `${p.clubName}: Ola ${p.memberName}, foste suspenso ate ${p.endDate}. Motivo: ${p.reason}. Contacta a direccao. - Raidao`)
+    `${p.clubName} | ${p.memberName}, foste suspenso de ${p.startDate} ate ${p.endDate}. Motivo: ${p.reason}. Para esclarecimentos contacta a direccao do clube. - Rungundum`)
+}
+
+export async function sendSuspensionLiftedSms(p: {
+  phone: string; memberName: string; clubName: string
+}) {
+  await send([p.phone],
+    `${p.clubName} | ${p.memberName}, a tua suspensao foi levantada. A tua situacao esta regularizada. Bem-vindo de volta! - Rungundum`)
 }
 
 export async function sendFineSms(p: {
   phone: string; memberName: string; clubName: string; reason: string; amount: number
 }) {
   await send([p.phone],
-    `${p.clubName}: Ola ${p.memberName}, tens uma multa de ${p.amount.toLocaleString()}Kz. Motivo: ${p.reason}. - Raidao`)
+    `${p.clubName} | ${p.memberName}, foi-te aplicada uma multa de ${p.amount.toLocaleString()} Kz. Motivo: ${p.reason}. Regulariza com o tesoureiro o mais breve possivel. - Rungundum`)
 }
 
 export async function sendRaidConfirmedSms(p: {
   phone: string; memberName: string; raidTitle: string; raidDate: string; clubName: string
 }) {
   await send([p.phone],
-    `${p.clubName}: Raid "${p.raidTitle}" confirmado para ${p.raidDate}. Confirma presenca na app. - Raidao`)
+    `${p.clubName} | ${p.memberName}, o raid "${p.raidTitle}" esta confirmado para ${p.raidDate}! Confirma a tua presenca na app. Boa estrada! - Rungundum`)
 }

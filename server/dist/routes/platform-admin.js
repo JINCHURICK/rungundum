@@ -11,6 +11,7 @@ const auth_1 = require("../middleware/auth");
 const plans_1 = require("../lib/plans");
 const plan_cache_1 = require("../lib/plan-cache");
 const prisma_2 = require("../lib/prisma");
+const email_1 = require("../services/email");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate, auth_1.requirePlatformAdmin);
 function clubTrialDaysLeft(trialEndsAt) {
@@ -18,28 +19,6 @@ function clubTrialDaysLeft(trialEndsAt) {
         return null;
     return Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / 86400000));
 }
-const DEFAULT_PLAN_CONFIGS = [
-    {
-        key: 'PRO', name: 'Motard', description: 'Plataforma completa de gestão para moto clubes angolanos',
-        currency: 'Kz', contactOnly: false, highlight: true,
-        maxMembers: null, maxRaidsPerMonth: null, emailNotifications: true, leaguesEnabled: false,
-        active: true, displayOrder: 0,
-        features: [
-            'Membros ilimitados',
-            'Raids ilimitados',
-            'Gestão de quotas e pagamentos',
-            'Processos disciplinares e suspensões',
-            'Envio de SMS para membros',
-            'Notificações por email',
-            'Plano de contingência por raid',
-            'Estatísticas e exportação CSV',
-        ],
-        pricingTiers: [
-            { months: 1, pricePerMonth: 12000, totalPrice: 12000, label: 'Mensal' },
-            { months: 12, pricePerMonth: 9500, totalPrice: 114000, label: 'Anual' },
-        ],
-    },
-];
 // Migra formato antigo para o novo (pricingTiers + features + highlight)
 function migrateLegacyConfig(c) {
     let pricingTiers = c.pricingTiers;
@@ -78,12 +57,11 @@ async function getPlanConfigs() {
     try {
         const settings = await prisma_1.prisma.platformSettings.upsert({
             where: { id: 'singleton' },
-            create: { id: 'singleton', planConfigs: DEFAULT_PLAN_CONFIGS },
+            create: { id: 'singleton', planConfigs: [] },
             update: {},
         });
         const raw = settings.planConfigs;
-        const configs = raw.length ? raw.map(migrateLegacyConfig) : DEFAULT_PLAN_CONFIGS;
-        // Write to file cache so next call doesn't need Prisma
+        const configs = raw.map(migrateLegacyConfig);
         (0, plan_cache_1.writePlanCache)(configs);
         return configs;
     }
@@ -91,7 +69,7 @@ async function getPlanConfigs() {
         if (err?.name === 'PrismaClientRustPanicError')
             (0, prisma_2.recreatePrismaClient)();
         console.error('[plan-configs] DB read failed:', err?.message ?? err);
-        return DEFAULT_PLAN_CONFIGS;
+        return [];
     }
 }
 // GET /api/platform-admin/stats
@@ -350,6 +328,104 @@ router.put('/plan-configs', async (req, res) => {
         if (err instanceof zod_1.z.ZodError)
             return res.status(400).json({ error: err.errors });
         throw err;
+    }
+});
+// ─────────────────────────────────────────────────────────────────────────────
+// PEDIDOS DE PAGAMENTO — COMPROVANTES DE TRANSFERÊNCIA
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/platform-admin/payment-requests
+router.get('/payment-requests', async (_req, res) => {
+    const payments = await prisma_1.prisma.subscriptionPayment.findMany({
+        include: { club: { select: { id: true, name: true, acronym: true, location: true, plan: true, planStatus: true } } },
+        orderBy: { createdAt: 'desc' },
+    });
+    return res.json(payments);
+});
+// PATCH /api/platform-admin/payment-requests/:id — aprovar ou rejeitar
+router.patch('/payment-requests/:id', async (req, res, next) => {
+    try {
+        const { action, renewMonths, reviewNotes } = zod_1.z.object({
+            action: zod_1.z.enum(['APPROVE', 'REJECT']),
+            renewMonths: zod_1.z.number().int().min(1).max(36).optional(),
+            reviewNotes: zod_1.z.string().optional(),
+        }).parse(req.body);
+        const payment = await prisma_1.prisma.subscriptionPayment.findUnique({
+            where: { id: req.params.id },
+            include: { club: { select: { name: true, planExpiresAt: true } } },
+        });
+        if (!payment)
+            return res.status(404).json({ error: 'Pedido não encontrado' });
+        if (payment.status === 'APPROVED')
+            return res.status(409).json({ error: 'Já aprovado' });
+        const now = new Date();
+        if (action === 'APPROVE') {
+            if (!renewMonths)
+                return res.status(400).json({ error: 'Número de meses obrigatório para aprovar' });
+            // Calcula nova data de expiração (soma ao período actual se ainda não expirou)
+            const base = payment.club.planExpiresAt && payment.club.planExpiresAt > now
+                ? payment.club.planExpiresAt : now;
+            const newExpiry = new Date(base);
+            newExpiry.setMonth(newExpiry.getMonth() + renewMonths);
+            // Mapeia planCode para o enum ClubPlan (compatibilidade legacy)
+            const planMap = { FREE: 'FREE', STARTER: 'STARTER', PRO: 'PRO', ENTERPRISE: 'ENTERPRISE' };
+            const newPlan = planMap[payment.planCode.toUpperCase()] ?? 'STARTER';
+            await prisma_1.prisma.$transaction([
+                prisma_1.prisma.subscriptionPayment.update({
+                    where: { id: payment.id },
+                    data: { status: 'APPROVED', reviewNotes: reviewNotes ?? null, reviewedAt: now, renewMonths, reviewedBy: req.user.userId },
+                }),
+                prisma_1.prisma.club.update({
+                    where: { id: payment.clubId },
+                    data: { plan: newPlan, planStatus: 'ACTIVE', planExpiresAt: newExpiry },
+                }),
+            ]);
+            (0, auth_1.invalidateClubStatusCache)(payment.clubId);
+            // Sincroniza também o modelo Subscription (novo sistema)
+            const plan = await prisma_1.prisma.plan.findFirst({
+                where: { code: { equals: payment.planCode, mode: 'insensitive' } },
+            });
+            if (plan) {
+                await prisma_1.prisma.subscription.upsert({
+                    where: { clubId: payment.clubId },
+                    update: { planId: plan.id, billingCycle: payment.billingCycle, status: 'ACTIVE', currentPeriodStart: now, currentPeriodEnd: newExpiry },
+                    create: { clubId: payment.clubId, planId: plan.id, billingCycle: payment.billingCycle, status: 'ACTIVE', currentPeriodStart: now, currentPeriodEnd: newExpiry },
+                });
+            }
+            const adminUser = await prisma_1.prisma.user.findFirst({
+                where: { clubId: payment.clubId, role: { in: ['ADMIN', 'APP_ADMIN'] } },
+                select: { email: true },
+            });
+            if (adminUser) {
+                await (0, email_1.sendSubscriptionApproved)({
+                    to: adminUser.email, clubName: payment.club.name,
+                    invoiceNumber: payment.invoiceNumber, planCode: payment.planCode,
+                    renewMonths, newExpiry, clientUrl: process.env.CLIENT_URL ?? 'http://localhost:5173',
+                });
+            }
+        }
+        else {
+            await prisma_1.prisma.subscriptionPayment.update({
+                where: { id: payment.id },
+                data: { status: 'REJECTED', reviewNotes: reviewNotes ?? null, reviewedAt: now, reviewedBy: req.user.userId },
+            });
+            const adminUser = await prisma_1.prisma.user.findFirst({
+                where: { clubId: payment.clubId, role: { in: ['ADMIN', 'APP_ADMIN'] } },
+                select: { email: true },
+            });
+            if (adminUser) {
+                await (0, email_1.sendSubscriptionRejected)({
+                    to: adminUser.email, clubName: payment.club.name,
+                    invoiceNumber: payment.invoiceNumber, reviewNotes: reviewNotes ?? '',
+                    clientUrl: process.env.CLIENT_URL ?? 'http://localhost:5173',
+                });
+            }
+        }
+        return res.json({ message: action === 'APPROVE' ? 'Subscrição aprovada com sucesso' : 'Pedido rejeitado' });
+    }
+    catch (err) {
+        if (err instanceof zod_1.z.ZodError)
+            return res.status(400).json({ error: err.errors });
+        next(err);
     }
 });
 exports.default = router;

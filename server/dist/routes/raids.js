@@ -59,7 +59,10 @@ const RAID_STATUS_VALUES = ['DRAFT', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'C
 // Paginação opcional: ?page=1&limit=50 (sem estes params retorna tudo — backward compat)
 router.get('/', async (req, res) => {
     const rawStatus = typeof req.query.status === 'string' ? req.query.status : undefined;
-    const status = RAID_STATUS_VALUES.includes(rawStatus) ? rawStatus : undefined;
+    const statusList = rawStatus
+        ? rawStatus.split(',').filter((s) => RAID_STATUS_VALUES.includes(s))
+        : [];
+    const status = statusList.length === 1 ? statusList[0] : undefined;
     const search = typeof req.query.search === 'string' ? req.query.search.slice(0, 100) : undefined;
     const year = typeof req.query.year === 'string' ? parseInt(req.query.year, 10) : undefined;
     const dateFilter = year && !isNaN(year) ? {
@@ -72,7 +75,7 @@ router.get('/', async (req, res) => {
     const limit = paginate ? Math.min(100, Math.max(1, limitRaw)) : undefined;
     const where = {
         clubId: req.user.clubId,
-        ...(status ? { status } : {}),
+        ...(statusList.length === 1 ? { status: statusList[0] } : statusList.length > 1 ? { status: { in: statusList } } : {}),
         ...dateFilter,
         ...(search ? {
             OR: [
@@ -327,18 +330,23 @@ router.post('/:id/duplicate', (0, auth_1.requireRole)('ADMIN', 'CAPTAIN'), async
     return res.status(201).json(newRaid);
 });
 // POST /api/raids/:id/photos — upload de foto
-router.post('/:id/photos', upload.single('photo'), async (req, res) => {
-    const raid = await prisma_1.prisma.raid.findFirst({ where: { id: req.params.id, clubId: req.user.clubId } });
-    if (!raid)
-        return res.status(404).json({ error: 'Raid não encontrado' });
-    if (!req.file)
-        return res.status(400).json({ error: 'Nenhum ficheiro enviado' });
-    const caption = typeof req.body.caption === 'string' ? req.body.caption : undefined;
-    const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${req.user.clubId}/raids/${raid.id}/photos`);
-    const photo = await prisma_1.prisma.raidPhoto.create({
-        data: { raidId: raid.id, url, caption, uploadedById: req.user.userId },
-    });
-    return res.status(201).json(photo);
+router.post('/:id/photos', upload.single('photo'), async (req, res, next) => {
+    try {
+        const raid = await prisma_1.prisma.raid.findFirst({ where: { id: req.params.id, clubId: req.user.clubId } });
+        if (!raid)
+            return res.status(404).json({ error: 'Raid não encontrado' });
+        if (!req.file)
+            return res.status(400).json({ error: 'Nenhum ficheiro enviado' });
+        const caption = typeof req.body.caption === 'string' ? req.body.caption : undefined;
+        const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${req.user.clubId}/raids/${raid.id}/photos`);
+        const photo = await prisma_1.prisma.raidPhoto.create({
+            data: { raidId: raid.id, url, caption, uploadedById: req.user.userId },
+        });
+        return res.status(201).json(photo);
+    }
+    catch (err) {
+        next(err);
+    }
 });
 // DELETE /api/raids/:id/photos/:photoId
 router.delete('/:id/photos/:photoId', (0, auth_1.requireRole)('ADMIN', 'CAPTAIN'), async (req, res) => {

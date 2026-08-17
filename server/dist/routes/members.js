@@ -225,15 +225,20 @@ router.patch('/:id', (0, auth_1.requirePermission)('MEMBERS_WRITE'), async (req,
     }
 });
 // POST /api/members/:id/photo
-router.post('/:id/photo', (0, auth_1.requirePermission)('MEMBERS_WRITE'), upload.single('photo'), async (req, res) => {
-    const member = await prisma_1.prisma.member.findFirst({ where: { id: req.params.id, clubId: req.user.clubId } });
-    if (!member)
-        return res.status(404).json({ error: 'Membro não encontrado' });
-    if (!req.file)
-        return res.status(400).json({ error: 'Ficheiro em falta' });
-    const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${req.user.clubId}/members/${req.params.id}`);
-    const updated = await prisma_1.prisma.member.update({ where: { id: req.params.id }, data: { photoUrl: url } });
-    return res.json({ photoUrl: updated.photoUrl });
+router.post('/:id/photo', (0, auth_1.requirePermission)('MEMBERS_WRITE'), upload.single('photo'), async (req, res, next) => {
+    try {
+        const member = await prisma_1.prisma.member.findFirst({ where: { id: req.params.id, clubId: req.user.clubId } });
+        if (!member)
+            return res.status(404).json({ error: 'Membro não encontrado' });
+        if (!req.file)
+            return res.status(400).json({ error: 'Ficheiro em falta' });
+        const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${req.user.clubId}/members/${req.params.id}`);
+        const updated = await prisma_1.prisma.member.update({ where: { id: req.params.id }, data: { photoUrl: url } });
+        return res.json({ photoUrl: updated.photoUrl });
+    }
+    catch (err) {
+        next(err);
+    }
 });
 // POST /api/members/:id/invite — gera link de convite para o membro criar conta
 router.post('/:id/invite', (0, auth_1.requirePermission)('MEMBERS_WRITE'), async (req, res) => {
@@ -329,18 +334,23 @@ router.patch('/:memberId/vehicles/:vehicleId', async (req, res) => {
     }
 });
 // POST /api/members/:memberId/vehicles/:vehicleId/photo
-router.post('/:memberId/vehicles/:vehicleId/photo', upload.single('photo'), async (req, res) => {
-    const member = await prisma_1.prisma.member.findFirst({ where: { id: req.params.memberId, clubId: req.user.clubId } });
-    if (!member)
-        return res.status(404).json({ error: 'Membro não encontrado' });
-    const vehicle = await prisma_1.prisma.vehicle.findFirst({ where: { id: req.params.vehicleId, memberId: req.params.memberId } });
-    if (!vehicle)
-        return res.status(404).json({ error: 'Veículo não encontrado' });
-    if (!req.file)
-        return res.status(400).json({ error: 'Ficheiro em falta' });
-    const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${req.user.clubId}/vehicles/${req.params.vehicleId}`);
-    const updated = await prisma_1.prisma.vehicle.update({ where: { id: vehicle.id }, data: { photoUrl: url } });
-    return res.json({ photoUrl: updated.photoUrl });
+router.post('/:memberId/vehicles/:vehicleId/photo', upload.single('photo'), async (req, res, next) => {
+    try {
+        const member = await prisma_1.prisma.member.findFirst({ where: { id: req.params.memberId, clubId: req.user.clubId } });
+        if (!member)
+            return res.status(404).json({ error: 'Membro não encontrado' });
+        const vehicle = await prisma_1.prisma.vehicle.findFirst({ where: { id: req.params.vehicleId, memberId: req.params.memberId } });
+        if (!vehicle)
+            return res.status(404).json({ error: 'Veículo não encontrado' });
+        if (!req.file)
+            return res.status(400).json({ error: 'Ficheiro em falta' });
+        const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${req.user.clubId}/vehicles/${req.params.vehicleId}`);
+        const updated = await prisma_1.prisma.vehicle.update({ where: { id: vehicle.id }, data: { photoUrl: url } });
+        return res.json({ photoUrl: updated.photoUrl });
+    }
+    catch (err) {
+        next(err);
+    }
 });
 // DELETE /api/members/:memberId/vehicles/:vehicleId
 router.delete('/:id', (0, auth_1.requirePermission)('MEMBERS_WRITE'), async (req, res) => {

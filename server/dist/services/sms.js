@@ -8,6 +8,7 @@ exports.sendBulkSms = sendBulkSms;
 exports.sendQuotaReminderSms = sendQuotaReminderSms;
 exports.sendQuotaPaidSms = sendQuotaPaidSms;
 exports.sendSuspensionSms = sendSuspensionSms;
+exports.sendSuspensionLiftedSms = sendSuspensionLiftedSms;
 exports.sendFineSms = sendFineSms;
 exports.sendRaidConfirmedSms = sendRaidConfirmedSms;
 const axios_1 = __importDefault(require("axios"));
@@ -87,12 +88,15 @@ async function sendQuotaPaidSms(p) {
     await send([p.phone], `${p.clubName} | Ola ${p.memberName}! O teu pagamento de quota foi confirmado: ${meses} de ${p.year} - ${p.amount.toLocaleString()} Kz. Obrigado pela pontualidade. Boa estrada!`);
 }
 async function sendSuspensionSms(p) {
-    await send([p.phone], `${p.clubName}: Ola ${p.memberName}, foste suspenso ate ${p.endDate}. Motivo: ${p.reason}. Contacta a direccao. - Raidao`);
+    await send([p.phone], `${p.clubName} | ${p.memberName}, foste suspenso de ${p.startDate} ate ${p.endDate}. Motivo: ${p.reason}. Para esclarecimentos contacta a direccao do clube. - Rungundum`);
+}
+async function sendSuspensionLiftedSms(p) {
+    await send([p.phone], `${p.clubName} | ${p.memberName}, a tua suspensao foi levantada. A tua situacao esta regularizada. Bem-vindo de volta! - Rungundum`);
 }
 async function sendFineSms(p) {
-    await send([p.phone], `${p.clubName}: Ola ${p.memberName}, tens uma multa de ${p.amount.toLocaleString()}Kz. Motivo: ${p.reason}. - Raidao`);
+    await send([p.phone], `${p.clubName} | ${p.memberName}, foi-te aplicada uma multa de ${p.amount.toLocaleString()} Kz. Motivo: ${p.reason}. Regulariza com o tesoureiro o mais breve possivel. - Rungundum`);
 }
 async function sendRaidConfirmedSms(p) {
-    await send([p.phone], `${p.clubName}: Raid "${p.raidTitle}" confirmado para ${p.raidDate}. Confirma presenca na app. - Raidao`);
+    await send([p.phone], `${p.clubName} | ${p.memberName}, o raid "${p.raidTitle}" esta confirmado para ${p.raidDate}! Confirma a tua presenca na app. Boa estrada! - Rungundum`);
 }
 //# sourceMappingURL=sms.js.map

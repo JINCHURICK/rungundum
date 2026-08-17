@@ -66,6 +66,49 @@ export declare function sendUpgradeRequest(params: {
     clubAdminEmail: string;
     adminUrl: string;
 }): Promise<void>;
+export declare function sendPaymentProofReceived(params: {
+    to: string;
+    clubName: string;
+    invoiceNumber: string;
+    planCode: string;
+    billingCycle: string;
+    amountKz: number;
+    proofUrl: string;
+    adminUrl: string;
+}): Promise<void>;
+export declare function sendSubscriptionApproved(params: {
+    to: string;
+    clubName: string;
+    invoiceNumber: string;
+    planCode: string;
+    renewMonths: number;
+    newExpiry: Date;
+    clientUrl: string;
+}): Promise<void>;
+export declare function sendSubscriptionRejected(params: {
+    to: string;
+    clubName: string;
+    invoiceNumber: string;
+    reviewNotes: string;
+    clientUrl: string;
+}): Promise<void>;
+export declare function sendFineEmail(params: {
+    to: string;
+    memberName: string;
+    clubName: string;
+    reason: string;
+    amount: number;
+    notes?: string | null;
+}): Promise<void>;
+export declare function sendSuspensionEmail(params: {
+    to: string;
+    memberName: string;
+    clubName: string;
+    reason: string;
+    startDate: string;
+    endDate: string;
+    notes?: string | null;
+}): Promise<void>;
 export declare function sendRaidInvite(params: {
     to: string;
     memberName: string;

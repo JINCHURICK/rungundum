@@ -22,7 +22,13 @@ export declare function sendSuspensionSms(p: {
     memberName: string;
     clubName: string;
     reason: string;
+    startDate: string;
     endDate: string;
+}): Promise<void>;
+export declare function sendSuspensionLiftedSms(p: {
+    phone: string;
+    memberName: string;
+    clubName: string;
 }): Promise<void>;
 export declare function sendFineSms(p: {
     phone: string;

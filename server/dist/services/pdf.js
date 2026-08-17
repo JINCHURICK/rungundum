@@ -46,13 +46,12 @@ async function launchBrowser() {
     });
 }
 async function generateRaidPDF(raid, club, options = {}) {
-    const resolvedLogoUrl = (0, cloudinary_1.resolveImageForPuppeteer)(club.logoUrl);
+    const resolvedLogoUrl = await (0, cloudinary_1.resolveImageForPuppeteer)(club.logoUrl);
     club = { ...club, logoUrl: resolvedLogoUrl };
-    // Resolver fotos dos participantes para base64 (necessário para Puppeteer em dev)
-    const resolvedParticipants = (raid.participants ?? []).map((p) => ({
+    const resolvedParticipants = await Promise.all((raid.participants ?? []).map(async (p) => ({
         ...p,
-        member: { ...p.member, resolvedPhotoUrl: (0, cloudinary_1.resolveImageForPuppeteer)(p.member?.photoUrl) },
-    }));
+        member: { ...p.member, resolvedPhotoUrl: await (0, cloudinary_1.resolveImageForPuppeteer)(p.member?.photoUrl) },
+    })));
     const opts = {
         includeRoster: true,
         includeRoutePoints: true,
@@ -411,7 +410,7 @@ ${opts.includeStatutes && club.statutesText ? `
     <div style="width:100%;display:flex;justify-content:space-between;align-items:center;
                 font-family:'Segoe UI',Arial,sans-serif;font-size:7pt;color:#aaa;
                 border-top:1px solid #e5e5e5;padding:4px 18mm 0;box-sizing:border-box;">
-      <span>${clubName} &middot; RaidManager</span>
+      <span>${clubName} &middot; Rungundum</span>
       <span>${raid.title} &middot; ${raidDate}</span>
       <span>Pag. <span class="pageNumber"></span> / <span class="totalPages"></span></span>
     </div>`;
@@ -448,8 +447,10 @@ function getRouteTypeLabel(t) {
 // ─────────────────────────────────────────────────────────────────────────────
 async function generateMemberCertificate(member, club, year) {
     const accentColor = club.accentColor ?? '#dc2626';
-    const resolvedLogoUrl = (0, cloudinary_1.resolveImageForPuppeteer)(club.logoUrl);
-    const resolvedPhotoUrl = (0, cloudinary_1.resolveImageForPuppeteer)(member.photoUrl);
+    const [resolvedLogoUrl, resolvedPhotoUrl] = await Promise.all([
+        (0, cloudinary_1.resolveImageForPuppeteer)(club.logoUrl),
+        (0, cloudinary_1.resolveImageForPuppeteer)(member.photoUrl),
+    ]);
     const participations = member.participations ?? [];
     const totalRaids = participations.length;
     const totalKm = Math.round(participations.reduce((sum, p) => sum + (p.raid?.estimatedKm ?? 0), 0));
@@ -726,7 +727,7 @@ async function generateMemberCertificate(member, club, year) {
 
 </div>
 
-<div class="watermark">${club.acronym ?? club.name} · RaidManager · ${year}</div>
+<div class="watermark">${club.acronym ?? club.name} · Rungundum · ${year}</div>
 </body>
 </html>`;
     const browser = await launchBrowser();
@@ -747,7 +748,7 @@ async function generateMemberCertificate(member, club, year) {
 async function generateAnnualReport(params) {
     const { club, year, raids, members, transactions } = params;
     const accentColor = club.accentColor ?? '#dc2626';
-    const resolvedLogoUrl = (0, cloudinary_1.resolveImageForPuppeteer)(club.logoUrl);
+    const resolvedLogoUrl = await (0, cloudinary_1.resolveImageForPuppeteer)(club.logoUrl);
     const completedRaids = raids.filter((r) => r.status === 'COMPLETED');
     const totalKm = Math.round(completedRaids.reduce((s, r) => s + (r.estimatedKm ?? 0), 0));
     const activeMembers = members.filter((m) => m.status === 'ACTIVE').length;
@@ -953,8 +954,7 @@ function getRaidStatusLabel(s) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Ficha de Membro
 // ─────────────────────────────────────────────────────────────────────────────
-function buildMemberProfileHTML(member, club, accentColor, resolvedLogoUrl) {
-    const resolvedPhotoUrl = (0, cloudinary_1.resolveImageForPuppeteer)(member.photoUrl);
+function buildMemberProfileHTML(member, club, accentColor, resolvedLogoUrl, resolvedPhotoUrl) {
     const initial = (member.nickname ?? member.fullName ?? '?').charAt(0).toUpperCase();
     const vehicles = member.vehicles ?? [];
     const positions = member.positions ?? [];
@@ -1077,7 +1077,7 @@ function buildMemberProfileHTML(member, club, accentColor, resolvedLogoUrl) {
 
   <!-- FOOTER -->
   <div class="member-footer">
-    <div class="footer-left">${club.name} &middot; RaidManager</div>
+    <div class="footer-left">${club.name} &middot; Rungundum</div>
     <div class="footer-right">Emitido em ${(0, date_fns_1.format)(new Date(), "dd/MM/yyyy")}</div>
   </div>
 
@@ -1085,19 +1085,20 @@ function buildMemberProfileHTML(member, club, accentColor, resolvedLogoUrl) {
 }
 async function generateMemberProfilePDF(member, club) {
     const accentColor = club.accentColor ?? '#dc2626';
-    const resolvedLogoUrl = (0, cloudinary_1.resolveImageForPuppeteer)(club.logoUrl);
-    const html = buildMemberProfilePageHTML([member], club, accentColor, resolvedLogoUrl);
+    const resolvedLogoUrl = await (0, cloudinary_1.resolveImageForPuppeteer)(club.logoUrl);
+    const html = await buildMemberProfilePageHTML([member], club, accentColor, resolvedLogoUrl);
     return launchPuppeteerPDF(html);
 }
 async function generateAllMembersProfilesPDF(members, club) {
     const accentColor = club.accentColor ?? '#dc2626';
-    const resolvedLogoUrl = (0, cloudinary_1.resolveImageForPuppeteer)(club.logoUrl);
-    const html = buildMemberProfilePageHTML(members, club, accentColor, resolvedLogoUrl);
+    const resolvedLogoUrl = await (0, cloudinary_1.resolveImageForPuppeteer)(club.logoUrl);
+    const html = await buildMemberProfilePageHTML(members, club, accentColor, resolvedLogoUrl);
     return launchPuppeteerPDF(html);
 }
-function buildMemberProfilePageHTML(members, club, accentColor, resolvedLogoUrl) {
+async function buildMemberProfilePageHTML(members, club, accentColor, resolvedLogoUrl) {
+    const resolvedPhotos = await Promise.all(members.map((m) => (0, cloudinary_1.resolveImageForPuppeteer)(m.photoUrl)));
     const membersHTML = members
-        .map((m, i) => buildMemberProfileHTML(m, club, accentColor, resolvedLogoUrl) + (i < members.length - 1 ? '<div class="page-break"></div>' : ''))
+        .map((m, i) => buildMemberProfileHTML(m, club, accentColor, resolvedLogoUrl, resolvedPhotos[i]) + (i < members.length - 1 ? '<div class="page-break"></div>' : ''))
         .join('');
     return `<!DOCTYPE html>
 <html lang="pt">

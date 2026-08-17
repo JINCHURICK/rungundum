@@ -13,6 +13,11 @@ exports.sendQuotaPaid = sendQuotaPaid;
 exports.sendTrialExpiring = sendTrialExpiring;
 exports.sendQuotaAlertEmail = sendQuotaAlertEmail;
 exports.sendUpgradeRequest = sendUpgradeRequest;
+exports.sendPaymentProofReceived = sendPaymentProofReceived;
+exports.sendSubscriptionApproved = sendSubscriptionApproved;
+exports.sendSubscriptionRejected = sendSubscriptionRejected;
+exports.sendFineEmail = sendFineEmail;
+exports.sendSuspensionEmail = sendSuspensionEmail;
 exports.sendRaidInvite = sendRaidInvite;
 exports.sendRaidReminder = sendRaidReminder;
 const nodemailer_1 = __importDefault(require("nodemailer"));
@@ -254,6 +259,153 @@ async function sendUpgradeRequest(params) {
         Gerir subscrições →
       </a>
       <p style="color:#666;font-size:14px">Rungundum · Painel Administrativo</p>
+    `,
+    });
+}
+async function sendPaymentProofReceived(params) {
+    const club = escapeHtml(params.clubName);
+    const cycle = params.billingCycle === 'ANNUAL' ? 'Anual' : 'Mensal';
+    await send({
+        to: params.to,
+        subject: `[Rungundum] Comprovante recebido — ${club} · Fatura ${params.invoiceNumber}`,
+        html: `
+      <div style="max-width:600px;margin:0 auto;font-family:sans-serif;color:#1f2937">
+        <div style="background:#dc2626;padding:16px 24px;border-radius:8px 8px 0 0">
+          <span style="color:white;font-size:15px;font-weight:bold">🧾 Comprovante de pagamento recebido</span>
+        </div>
+        <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+          <table style="border-collapse:collapse;width:100%;margin-bottom:20px">
+            <tr><td style="padding:6px 0;color:#6b7280;font-size:14px;width:140px">Clube</td><td style="padding:6px 0;font-weight:600">${club}</td></tr>
+            <tr><td style="padding:6px 0;color:#6b7280;font-size:14px">Fatura</td><td style="padding:6px 0;font-weight:600">${params.invoiceNumber}</td></tr>
+            <tr><td style="padding:6px 0;color:#6b7280;font-size:14px">Plano</td><td style="padding:6px 0">${params.planCode} · ${cycle}</td></tr>
+            <tr><td style="padding:6px 0;color:#6b7280;font-size:14px">Valor</td><td style="padding:6px 0;font-weight:600;color:#dc2626">${params.amountKz.toLocaleString('pt-AO')} Kz</td></tr>
+          </table>
+          <p style="margin-bottom:16px">O comprovante de transferência bancária está disponível em:</p>
+          <a href="${params.proofUrl}" style="color:#dc2626;word-break:break-all">Ver comprovante →</a>
+          <br><br>
+          <a href="${params.adminUrl}" style="background:#dc2626;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin-top:8px">
+            Revisar no painel →
+          </a>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0">
+          <p style="color:#9ca3af;font-size:12px">Rungundum · Painel Administrativo</p>
+        </div>
+      </div>
+    `,
+    });
+}
+async function sendSubscriptionApproved(params) {
+    const club = escapeHtml(params.clubName);
+    const expiry = params.newExpiry.toLocaleDateString('pt-AO', { day: '2-digit', month: 'long', year: 'numeric' });
+    await send({
+        to: params.to,
+        subject: `[Rungundum] Subscrição renovada — ${club}`,
+        html: `
+      <div style="max-width:600px;margin:0 auto;font-family:sans-serif;color:#1f2937">
+        <div style="background:#16a34a;padding:16px 24px;border-radius:8px 8px 0 0">
+          <span style="color:white;font-size:15px;font-weight:bold">✅ Subscrição activada</span>
+        </div>
+        <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+          <p>Olá, equipa do <strong>${club}</strong>!</p>
+          <p>O vosso pagamento foi confirmado e a subscrição foi activada.</p>
+          <table style="border-collapse:collapse;width:100%;margin:16px 0">
+            <tr><td style="padding:6px 0;color:#6b7280;font-size:14px;width:140px">Fatura</td><td style="padding:6px 0;font-weight:600">${params.invoiceNumber}</td></tr>
+            <tr><td style="padding:6px 0;color:#6b7280;font-size:14px">Plano</td><td style="padding:6px 0">${params.planCode}</td></tr>
+            <tr><td style="padding:6px 0;color:#6b7280;font-size:14px">Renovação</td><td style="padding:6px 0">${params.renewMonths} ${params.renewMonths === 1 ? 'mês' : 'meses'}</td></tr>
+            <tr><td style="padding:6px 0;color:#6b7280;font-size:14px">Válido até</td><td style="padding:6px 0;font-weight:600;color:#16a34a">${expiry}</td></tr>
+          </table>
+          <a href="${params.clientUrl}/dashboard" style="background:#16a34a;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin-top:8px">
+            Aceder ao sistema →
+          </a>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0">
+          <p style="color:#9ca3af;font-size:12px">Rungundum · Obrigado pela vossa confiança!</p>
+        </div>
+      </div>
+    `,
+    });
+}
+async function sendSubscriptionRejected(params) {
+    const club = escapeHtml(params.clubName);
+    const notes = escapeHtml(params.reviewNotes);
+    await send({
+        to: params.to,
+        subject: `[Rungundum] Pagamento não confirmado — Fatura ${params.invoiceNumber}`,
+        html: `
+      <div style="max-width:600px;margin:0 auto;font-family:sans-serif;color:#1f2937">
+        <div style="background:#ca8a04;padding:16px 24px;border-radius:8px 8px 0 0">
+          <span style="color:white;font-size:15px;font-weight:bold">⚠️ Pagamento não confirmado</span>
+        </div>
+        <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+          <p>Olá, equipa do <strong>${club}</strong>.</p>
+          <p>Não conseguimos confirmar o pagamento referente à fatura <strong>${params.invoiceNumber}</strong>.</p>
+          ${notes ? `<p><strong>Motivo:</strong> ${notes}</p>` : ''}
+          <p>Por favor, verifica se a transferência foi efectuada correctamente e submete um novo comprovante.</p>
+          <a href="${params.clientUrl}/subscription/pay" style="background:#dc2626;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin-top:8px">
+            Submeter novo comprovante →
+          </a>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0">
+          <p style="color:#9ca3af;font-size:12px">Rungundum · Para dúvidas, contacta o suporte.</p>
+        </div>
+      </div>
+    `,
+    });
+}
+async function sendFineEmail(params) {
+    const club = escapeHtml(params.clubName);
+    const member = escapeHtml(params.memberName);
+    const reason = escapeHtml(params.reason);
+    const notes = params.notes ? escapeHtml(params.notes) : null;
+    await send({
+        to: params.to,
+        subject: `[${club}] Multa aplicada — ${params.amount.toLocaleString('pt-AO')} Kz`,
+        html: `
+      <div style="max-width:600px;margin:0 auto;font-family:sans-serif;color:#1f2937">
+        <div style="background:#dc2626;padding:16px 24px;border-radius:8px 8px 0 0">
+          <span style="color:white;font-size:15px;font-weight:bold">⚖️ Notificação de multa</span>
+        </div>
+        <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+          <p>Olá <strong>${member}</strong>,</p>
+          <p>A direcção do <strong>${club}</strong> informa que te foi aplicada uma multa.</p>
+          <table style="border-collapse:collapse;width:100%;margin:16px 0;background:#fef2f2;border-radius:8px">
+            <tr><td style="padding:10px 14px;color:#6b7280;font-size:14px;width:130px">Valor</td><td style="padding:10px 14px;font-weight:700;font-size:18px;color:#dc2626">${params.amount.toLocaleString('pt-AO')} Kz</td></tr>
+            <tr><td style="padding:10px 14px;color:#6b7280;font-size:14px;border-top:1px solid #fee2e2">Motivo</td><td style="padding:10px 14px;border-top:1px solid #fee2e2">${reason}</td></tr>
+            ${notes ? `<tr><td style="padding:10px 14px;color:#6b7280;font-size:14px;border-top:1px solid #fee2e2">Observações</td><td style="padding:10px 14px;border-top:1px solid #fee2e2">${notes}</td></tr>` : ''}
+          </table>
+          <p>Por favor, regulariza este valor junto do tesoureiro do clube o mais breve possível.</p>
+          <p>Para esclarecimentos ou contestação, contacta a direcção do ${club}.</p>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0">
+          <p style="color:#9ca3af;font-size:12px">${club} · Rungundum — este é um aviso automático</p>
+        </div>
+      </div>
+    `,
+    });
+}
+async function sendSuspensionEmail(params) {
+    const club = escapeHtml(params.clubName);
+    const member = escapeHtml(params.memberName);
+    const reason = escapeHtml(params.reason);
+    const notes = params.notes ? escapeHtml(params.notes) : null;
+    await send({
+        to: params.to,
+        subject: `[${club}] Suspensão aplicada`,
+        html: `
+      <div style="max-width:600px;margin:0 auto;font-family:sans-serif;color:#1f2937">
+        <div style="background:#7f1d1d;padding:16px 24px;border-radius:8px 8px 0 0">
+          <span style="color:white;font-size:15px;font-weight:bold">🚫 Notificação de suspensão</span>
+        </div>
+        <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+          <p>Caro(a) <strong>${member}</strong>,</p>
+          <p>A direcção do <strong>${club}</strong> informa que foste suspenso(a) por decisão disciplinar.</p>
+          <table style="border-collapse:collapse;width:100%;margin:16px 0;background:#fef2f2;border-radius:8px">
+            <tr><td style="padding:10px 14px;color:#6b7280;font-size:14px;width:130px">Período</td><td style="padding:10px 14px;font-weight:600">${params.startDate} — ${params.endDate}</td></tr>
+            <tr><td style="padding:10px 14px;color:#6b7280;font-size:14px;border-top:1px solid #fee2e2">Motivo</td><td style="padding:10px 14px;border-top:1px solid #fee2e2">${reason}</td></tr>
+            ${notes ? `<tr><td style="padding:10px 14px;color:#6b7280;font-size:14px;border-top:1px solid #fee2e2">Observações</td><td style="padding:10px 14px;border-top:1px solid #fee2e2">${notes}</td></tr>` : ''}
+          </table>
+          <p>Durante o período de suspensão, o acesso ao sistema e a participação em raids e eventos do clube estará impedida.</p>
+          <p>Para esclarecimentos ou contestação desta decisão, contacta directamente a direcção do ${club}.</p>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0">
+          <p style="color:#9ca3af;font-size:12px">${club} · Rungundum — este é um aviso automático</p>
+        </div>
+      </div>
     `,
     });
 }

@@ -7,6 +7,7 @@ require("./prisma-patch"); // MUST be first — patches Prisma before any Prisma
 require("./env");
 const app_1 = __importDefault(require("./app"));
 const prisma_1 = require("./lib/prisma");
+const cloudinary_1 = require("./services/cloudinary");
 const socketPath = process.env.LSNODE_SOCKET;
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
 function isPrismaPanic(err) {
@@ -39,6 +40,8 @@ process.on('uncaughtException', (err) => {
     console.error('Uncaught exception:', err);
     process.exit(1);
 });
+prisma_1.prisma.$connect().catch(() => { });
+(0, cloudinary_1.calibrateClockOffset)().catch(() => { });
 if (socketPath) {
     app_1.default.listen(socketPath, () => {
         console.log(`🏍️  Rungundum Server running on socket ${socketPath}`);

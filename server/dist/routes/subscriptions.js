@@ -1,11 +1,18 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const zod_1 = require("zod");
+const multer_1 = __importDefault(require("multer"));
 const prisma_1 = require("../lib/prisma");
 const auth_1 = require("../middleware/auth");
 const plans_1 = require("../lib/plans");
 const email_1 = require("../services/email");
+const cloudinary_1 = require("../services/cloudinary");
+const plan_cache_1 = require("../lib/plan-cache");
+const upload = (0, multer_1.default)({ storage: multer_1.default.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
 // GET /api/subscriptions/me — estado actual do plano do clube
@@ -232,6 +239,162 @@ router.post('/switch-plan', (0, auth_1.requireRole)('ADMIN'), async (req, res) =
             return res.status(400).json({ error: err.errors });
         throw err;
     }
+});
+// ─────────────────────────────────────────────────────────────────────────────
+// PAGAMENTOS VIA TRANSFERÊNCIA BANCÁRIA
+// ─────────────────────────────────────────────────────────────────────────────
+async function generateInvoiceNumber() {
+    const year = new Date().getFullYear();
+    const prefix = `RNG-${year}-`;
+    const last = await prisma_1.prisma.subscriptionPayment.findFirst({
+        where: { invoiceNumber: { startsWith: prefix } },
+        orderBy: { invoiceNumber: 'desc' },
+    });
+    const lastNum = last ? parseInt(last.invoiceNumber.split('-')[2], 10) : 0;
+    return `${prefix}${String(lastNum + 1).padStart(4, '0')}`;
+}
+// GET /api/subscriptions/payment/pending — pedido pendente ou com comprovante (para retoma de fluxo)
+router.get('/payment/pending', (0, auth_1.requirePermission)('SUBSCRIPTIONS'), async (req, res, next) => {
+    try {
+        const planConfigs = (0, plan_cache_1.readPlanCache)() ?? [];
+        const payment = await prisma_1.prisma.subscriptionPayment.findFirst({
+            where: {
+                clubId: req.user.clubId,
+                status: { in: ['PENDING_PROOF', 'PROOF_UPLOADED'] },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+        if (!payment)
+            return res.json(null);
+        const plan = planConfigs.find((p) => p.key === payment.planCode);
+        const club = await prisma_1.prisma.club.findUnique({
+            where: { id: req.user.clubId },
+            select: { name: true, acronym: true },
+        });
+        return res.json({
+            ...payment,
+            planName: plan?.name ?? payment.planCode,
+            clubName: club?.name ?? '',
+            bankHolder: process.env.BANK_HOLDER ?? '',
+            bankName: process.env.BANK_NAME ?? '',
+            bankIban: process.env.BANK_IBAN ?? '',
+            bankAccount: process.env.BANK_ACCOUNT ?? '',
+        });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+// POST /api/subscriptions/payment — criar pedido de pagamento (gera fatura)
+router.post('/payment', (0, auth_1.requirePermission)('SUBSCRIPTIONS'), async (req, res, next) => {
+    try {
+        const { planCode, billingCycle } = zod_1.z.object({
+            planCode: zod_1.z.string(),
+            billingCycle: zod_1.z.enum(['MONTHLY', 'ANNUAL']),
+        }).parse(req.body);
+        // Ler plano do file cache (configurado em /platform-admin/plans)
+        const planConfigs = (0, plan_cache_1.readPlanCache)() ?? [];
+        const plan = planConfigs.find((p) => p.key === planCode && p.active !== false);
+        if (!plan)
+            return res.status(404).json({ error: 'Plano não encontrado' });
+        const months = billingCycle === 'ANNUAL' ? 12 : 1;
+        const tier = plan.pricingTiers?.find((t) => t.months === months)
+            ?? plan.pricingTiers?.[0];
+        if (!tier)
+            return res.status(400).json({ error: 'Plano sem preço configurado' });
+        const amountKz = tier.totalPrice;
+        const invoiceNumber = await generateInvoiceNumber();
+        const club = await prisma_1.prisma.club.findUnique({
+            where: { id: req.user.clubId },
+            select: { name: true, acronym: true },
+        });
+        // Cancelar pedidos anteriores ainda activos — um clube só tem um pagamento activo de cada vez
+        await prisma_1.prisma.subscriptionPayment.updateMany({
+            where: { clubId: req.user.clubId, status: { in: ['PENDING_PROOF', 'PROOF_UPLOADED'] } },
+            data: { status: 'REJECTED', reviewNotes: 'Substituído por novo pedido' },
+        });
+        const payment = await prisma_1.prisma.subscriptionPayment.create({
+            data: { clubId: req.user.clubId, planCode, billingCycle, amountKz, invoiceNumber },
+        });
+        return res.status(201).json({
+            ...payment,
+            planName: plan.name,
+            clubName: club?.name,
+            clubAcronym: club?.acronym,
+            bankHolder: process.env.BANK_HOLDER ?? '',
+            bankName: process.env.BANK_NAME ?? '',
+            bankIban: process.env.BANK_IBAN ?? '',
+            bankAccount: process.env.BANK_ACCOUNT ?? '',
+        });
+    }
+    catch (err) {
+        if (err instanceof zod_1.z.ZodError)
+            return res.status(400).json({ error: err.errors });
+        next(err);
+    }
+});
+// POST /api/subscriptions/payment/:id/proof — upload comprovante
+router.post('/payment/:id/proof', (0, auth_1.requirePermission)('SUBSCRIPTIONS'), upload.single('proof'), async (req, res, next) => {
+    try {
+        const payment = await prisma_1.prisma.subscriptionPayment.findFirst({
+            where: { id: req.params.id, clubId: req.user.clubId },
+        });
+        if (!payment)
+            return res.status(404).json({ error: 'Pedido não encontrado' });
+        if (payment.status === 'APPROVED')
+            return res.status(409).json({ error: 'Pagamento já aprovado' });
+        if (!req.file)
+            return res.status(400).json({ error: 'Ficheiro em falta' });
+        const proofUrl = await (0, cloudinary_1.uploadDocumentToCloudinary)(req.file.buffer, `subscriptions/${payment.clubId}/proofs`);
+        const updated = await prisma_1.prisma.subscriptionPayment.update({
+            where: { id: payment.id },
+            data: { proofUrl, status: 'PROOF_UPLOADED' },
+        });
+        // Email de notificação — falha isolada para não bloquear a resposta ao cliente
+        try {
+            const notifyEmail = process.env.PLATFORM_NOTIFY_EMAIL ?? process.env.PLATFORM_ADMIN_EMAIL;
+            if (notifyEmail) {
+                const club = await prisma_1.prisma.club.findUnique({ where: { id: payment.clubId }, select: { name: true } });
+                const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5173';
+                const absoluteProofUrl = proofUrl.startsWith('http') ? proofUrl : `${clientUrl}${proofUrl}`;
+                await (0, email_1.sendPaymentProofReceived)({
+                    to: notifyEmail,
+                    clubName: club?.name ?? payment.clubId,
+                    invoiceNumber: payment.invoiceNumber,
+                    planCode: payment.planCode,
+                    billingCycle: payment.billingCycle,
+                    amountKz: payment.amountKz,
+                    proofUrl: absoluteProofUrl,
+                    adminUrl: `${clientUrl}/platform-admin/payment-requests`,
+                });
+            }
+        }
+        catch (emailErr) {
+            console.error('[proof] falha ao enviar email de notificação:', emailErr);
+        }
+        return res.json(updated);
+    }
+    catch (err) {
+        next(err);
+    }
+});
+// GET /api/subscriptions/payments — histórico de pagamentos do clube
+router.get('/payments', async (req, res) => {
+    const payments = await prisma_1.prisma.subscriptionPayment.findMany({
+        where: { clubId: req.user.clubId },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+    });
+    return res.json(payments);
+});
+// GET /api/subscriptions/payment/:id — detalhes de um pagamento específico
+router.get('/payment/:id', async (req, res) => {
+    const payment = await prisma_1.prisma.subscriptionPayment.findFirst({
+        where: { id: req.params.id, clubId: req.user.clubId },
+    });
+    if (!payment)
+        return res.status(404).json({ error: 'Pedido não encontrado' });
+    return res.json(payment);
 });
 exports.default = router;
 //# sourceMappingURL=subscriptions.js.map

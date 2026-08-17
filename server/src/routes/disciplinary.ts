@@ -2,7 +2,8 @@ import { Router, Response } from 'express'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { authenticate, requirePermission, requireRole, AuthRequest } from '../middleware/auth'
-import { sendSuspensionSms, sendFineSms } from '../services/sms'
+import { sendSuspensionSms, sendSuspensionLiftedSms, sendFineSms } from '../services/sms'
+import { sendFineEmail, sendSuspensionEmail } from '../services/email'
 
 const router = Router()
 router.use(authenticate)
@@ -133,7 +134,7 @@ router.post('/suspensions', async (req: AuthRequest, res: Response) => {
 
     const member = await prisma.member.findFirst({
       where: { id: data.memberId, clubId: req.user!.clubId },
-      include: { club: { select: { name: true } } },
+      include: { club: { select: { name: true } }, user: { select: { email: true } } },
     })
     if (!member) return res.status(404).json({ error: 'Membro não encontrado' })
 
@@ -164,14 +165,22 @@ router.post('/suspensions', async (req: AuthRequest, res: Response) => {
       await prisma.member.update({ where: { id: data.memberId }, data: { status: 'SUSPENDED' } })
     }
 
-    // SMS de notificação
+    const memberName = member.nickname ?? member.fullName
+    const clubName   = member.club.name
+    const startStr   = start.toLocaleDateString('pt-AO')
+    const endStr     = end.toLocaleDateString('pt-AO')
+
     if (member.phone) {
       sendSuspensionSms({
-        phone:      member.phone,
-        memberName: member.nickname ?? member.fullName,
-        clubName:   member.club.name,
-        reason:     data.reason,
-        endDate:    end.toLocaleDateString('pt-AO'),
+        phone: member.phone, memberName, clubName,
+        reason: data.reason, startDate: startStr, endDate: endStr,
+      }).catch(() => {})
+    }
+    if (member.user?.email) {
+      sendSuspensionEmail({
+        to: member.user.email, memberName, clubName,
+        reason: data.reason, startDate: startStr, endDate: endStr,
+        notes: data.notes ?? null,
       }).catch(() => {})
     }
 
@@ -209,6 +218,19 @@ router.patch('/suspensions/:id/lift', async (req: AuthRequest, res: Response) =>
   })
   if (otherActive === 0) {
     await prisma.member.update({ where: { id: suspension.memberId }, data: { status: 'ACTIVE' } })
+  }
+
+  // SMS de levantamento
+  const liftedMember = await prisma.member.findUnique({
+    where: { id: suspension.memberId },
+    include: { club: { select: { name: true } } },
+  })
+  if (liftedMember?.phone) {
+    sendSuspensionLiftedSms({
+      phone:      liftedMember.phone,
+      memberName: liftedMember.nickname ?? liftedMember.fullName,
+      clubName:   liftedMember.club.name,
+    }).catch(() => {})
   }
 
   return res.json(updated)
@@ -251,7 +273,7 @@ router.post('/fines', async (req: AuthRequest, res: Response) => {
 
     const member = await prisma.member.findFirst({
       where: { id: data.memberId, clubId: req.user!.clubId },
-      include: { club: { select: { name: true } } },
+      include: { club: { select: { name: true } }, user: { select: { email: true } } },
     })
     if (!member) return res.status(404).json({ error: 'Membro não encontrado' })
 
@@ -271,15 +293,14 @@ router.post('/fines', async (req: AuthRequest, res: Response) => {
       },
     })
 
-    // SMS de notificação
+    const memberName = member.nickname ?? member.fullName
+    const clubName   = member.club.name
+
     if (member.phone) {
-      sendFineSms({
-        phone:      member.phone,
-        memberName: member.nickname ?? member.fullName,
-        clubName:   member.club.name,
-        reason:     data.reason,
-        amount:     data.amount,
-      }).catch(() => {})
+      sendFineSms({ phone: member.phone, memberName, clubName, reason: data.reason, amount: data.amount }).catch(() => {})
+    }
+    if (member.user?.email) {
+      sendFineEmail({ to: member.user.email, memberName, clubName, reason: data.reason, amount: data.amount, notes: data.notes ?? null }).catch(() => {})
     }
 
     return res.status(201).json(fine)
