@@ -11,6 +11,7 @@ exports.calibrateClockOffset = calibrateClockOffset;
 exports.uploadToCloudinary = uploadToCloudinary;
 exports.uploadDocumentToCloudinary = uploadDocumentToCloudinary;
 const cloudinary_1 = require("cloudinary");
+const sharp_1 = __importDefault(require("sharp"));
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 cloudinary_1.v2.config({
@@ -63,6 +64,14 @@ function validateDocumentBuffer(buffer) {
         return 'application/pdf';
     }
     throw new Error('Tipo de ficheiro nao permitido. Apenas JPEG, PNG, WebP ou PDF sao aceites.');
+}
+// Optimiza imagem: auto-roda (EXIF), redimensiona ate 1500px, converte para WebP q85
+async function optimizeImage(buffer) {
+    return (0, sharp_1.default)(buffer)
+        .rotate()
+        .resize(1500, 1500, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 85 })
+        .toBuffer();
 }
 function ensureDir(dir) {
     if (!fs_1.default.existsSync(dir))
@@ -228,12 +237,18 @@ async function _doCloudinaryUpload(buffer, folder, resourceType, extraOptions = 
     }
 }
 async function uploadToCloudinary(buffer, folder) {
-    const detectedMime = validateImageBuffer(buffer);
-    return saveLocally(buffer, folder, detectedMime);
+    validateImageBuffer(buffer); // valida magic bytes antes de processar
+    const optimized = await optimizeImage(buffer);
+    return saveLocally(optimized, folder, 'image/webp');
 }
-// Para comprovantes de pagamento -- aceita imagens e PDF, sempre guarda localmente.
+// Para comprovantes de pagamento -- aceita imagens e PDF.
+// Imagens sao optimizadas; PDFs sao guardados directamente.
 async function uploadDocumentToCloudinary(buffer, folder) {
     const detectedMime = validateDocumentBuffer(buffer);
-    return saveLocally(buffer, folder, detectedMime);
+    if (detectedMime === 'application/pdf') {
+        return saveLocally(buffer, folder, detectedMime);
+    }
+    const optimized = await optimizeImage(buffer);
+    return saveLocally(optimized, folder, 'image/webp');
 }
 //# sourceMappingURL=cloudinary.js.map

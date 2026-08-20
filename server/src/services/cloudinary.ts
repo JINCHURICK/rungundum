@@ -1,4 +1,5 @@
 import { v2 as cloudinary } from 'cloudinary'
+import sharp from 'sharp'
 import fs from 'fs'
 import path from 'path'
 
@@ -53,6 +54,15 @@ export function validateDocumentBuffer(buffer: Buffer): string {
     return 'application/pdf'
   }
   throw new Error('Tipo de ficheiro nao permitido. Apenas JPEG, PNG, WebP ou PDF sao aceites.')
+}
+
+// Optimiza imagem: auto-roda (EXIF), redimensiona ate 1500px, converte para WebP q85
+async function optimizeImage(buffer: Buffer): Promise<Buffer> {
+  return sharp(buffer)
+    .rotate()
+    .resize(1500, 1500, { fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: 85 })
+    .toBuffer()
 }
 
 function ensureDir(dir: string) {
@@ -228,12 +238,18 @@ async function _doCloudinaryUpload(
 }
 
 export async function uploadToCloudinary(buffer: Buffer, folder: string): Promise<string> {
-  const detectedMime = validateImageBuffer(buffer)
-  return saveLocally(buffer, folder, detectedMime)
+  validateImageBuffer(buffer) // valida magic bytes antes de processar
+  const optimized = await optimizeImage(buffer)
+  return saveLocally(optimized, folder, 'image/webp')
 }
 
-// Para comprovantes de pagamento -- aceita imagens e PDF, sempre guarda localmente.
+// Para comprovantes de pagamento -- aceita imagens e PDF.
+// Imagens sao optimizadas; PDFs sao guardados directamente.
 export async function uploadDocumentToCloudinary(buffer: Buffer, folder: string): Promise<string> {
   const detectedMime = validateDocumentBuffer(buffer)
-  return saveLocally(buffer, folder, detectedMime)
+  if (detectedMime === 'application/pdf') {
+    return saveLocally(buffer, folder, detectedMime)
+  }
+  const optimized = await optimizeImage(buffer)
+  return saveLocally(optimized, folder, 'image/webp')
 }
