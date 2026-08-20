@@ -353,6 +353,7 @@ router.delete('/fines/:id', (0, auth_1.requireRole)('ADMIN'), async (req, res) =
     if (!fine)
         return res.status(404).json({ error: 'Multa não encontrada' });
     await prisma_1.prisma.fine.delete({ where: { id: fine.id } });
+    (0, treasury_1.deleteFineTransaction)(fine.id, fine.clubId).catch(err => console.error('[treasury] falha ao remover transacção de multa:', err));
     return res.status(204).send();
 });
 exports.default = router;
