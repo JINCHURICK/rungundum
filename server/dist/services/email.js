@@ -19,6 +19,7 @@ exports.sendSubscriptionRejected = sendSubscriptionRejected;
 exports.sendFineEmail = sendFineEmail;
 exports.sendSuspensionEmail = sendSuspensionEmail;
 exports.sendRaidInvite = sendRaidInvite;
+exports.sendWelcomeEmail = sendWelcomeEmail;
 exports.sendRaidReminder = sendRaidReminder;
 const nodemailer_1 = __importDefault(require("nodemailer"));
 function escapeHtml(s) {
@@ -425,6 +426,40 @@ async function sendRaidInvite(params) {
         Confirmar Presença →
       </a>
       <p style="color:#666;font-size:14px">${clubName} · Rungundum</p>
+    `,
+    });
+}
+async function sendWelcomeEmail(params) {
+    const clubName = escapeHtml(params.clubName);
+    const memberName = escapeHtml(params.memberName);
+    await send({
+        to: params.to,
+        subject: `Bem-vindo ao ${clubName}! — As tuas credenciais de acesso`,
+        html: `
+      <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto">
+        <div style="background:#dc2626;padding:24px 28px;border-radius:8px 8px 0 0">
+          <h1 style="color:#fff;margin:0;font-size:22px">Bem-vindo ao ${clubName}!</h1>
+        </div>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;padding:28px;border-radius:0 0 8px 8px">
+          <p style="font-size:15px;color:#1a2035">Olá <strong>${memberName}</strong>,</p>
+          <p style="font-size:14px;color:#4b5563">A tua conta no Rungundum foi criada com sucesso. Podes agora aceder à plataforma do clube com as credenciais abaixo.</p>
+          <table style="width:100%;border-collapse:collapse;margin:20px 0;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px">
+            <tr>
+              <td style="padding:12px 16px;font-size:13px;font-weight:600;color:#6b7280;border-bottom:1px solid #e5e7eb;width:40%">Email</td>
+              <td style="padding:12px 16px;font-size:13px;color:#1a2035;border-bottom:1px solid #e5e7eb;font-family:monospace">${escapeHtml(params.to)}</td>
+            </tr>
+            <tr>
+              <td style="padding:12px 16px;font-size:13px;font-weight:600;color:#6b7280">Password provisória</td>
+              <td style="padding:12px 16px;font-size:13px;color:#1a2035;font-family:monospace">${escapeHtml(params.password)}</td>
+            </tr>
+          </table>
+          <a href="${params.loginUrl}" style="background:#dc2626;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:8px 0;font-size:14px;font-weight:600">
+            Entrar na plataforma →
+          </a>
+          <p style="font-size:13px;color:#9ca3af;margin-top:20px">Por segurança, altera a tua password após o primeiro acesso em <em>Conta → Alterar Password</em>.</p>
+          <p style="font-size:12px;color:#9ca3af;margin-top:4px">${clubName} · Rungundum</p>
+        </div>
+      </div>
     `,
     });
 }

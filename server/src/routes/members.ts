@@ -4,7 +4,7 @@ import { randomBytes } from 'crypto'
 import { prisma } from '../lib/prisma'
 import { authenticate, requirePermission, AuthRequest } from '../middleware/auth'
 import { uploadToCloudinary } from '../services/cloudinary'
-import { sendAccountInvite } from '../services/email'
+import { sendAccountInvite, sendWelcomeEmail } from '../services/email'
 import multer from 'multer'
 import bcrypt from 'bcryptjs'
 import { checkPlanLimit } from '../middleware/planLimit'
@@ -165,6 +165,19 @@ router.post('/', requirePermission('MEMBERS_WRITE'), async (req: AuthRequest, re
       })
       return member
     })
+
+    // Enviar email de boas-vindas se foi criada conta com email + password
+    if (email && password) {
+      const club = await prisma.club.findUnique({ where: { id: req.user!.clubId }, select: { name: true } })
+      const loginUrl = `${process.env.CLIENT_URL ?? 'https://rungundum.com'}/login`
+      sendWelcomeEmail({
+        to: email,
+        memberName: memberData.fullName,
+        clubName: club?.name ?? 'Rungundum',
+        password,
+        loginUrl,
+      }).catch((err) => console.error('[members] Erro ao enviar email de boas-vindas:', err))
+    }
 
     return res.status(201).json(result)
   } catch (err) {

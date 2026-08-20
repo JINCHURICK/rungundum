@@ -117,6 +117,13 @@ export declare function sendRaidInvite(params: {
     clubName: string;
     confirmUrl: string;
 }): Promise<void>;
+export declare function sendWelcomeEmail(params: {
+    to: string;
+    memberName: string;
+    clubName: string;
+    password: string;
+    loginUrl: string;
+}): Promise<void>;
 export declare function sendRaidReminder(params: {
     to: string;
     memberName: string;
