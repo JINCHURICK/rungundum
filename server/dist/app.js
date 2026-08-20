@@ -104,9 +104,17 @@ app.use('/api/notifications', notifications_1.default);
 // Em produção, o Express serve o frontend React compilado
 if (process.env.NODE_ENV === 'production') {
     const clientDist = path_1.default.join(__dirname, '..', '..', 'client', 'dist');
-    app.use(express_1.default.static(clientDist));
-    // SPA fallback — só para rotas que não começam com /api/
-    app.get(/^(?!\/api\/).*/, (_, res) => res.sendFile(path_1.default.join(clientDist, 'index.html')));
+    // Assets com hash no nome → cache longa (imutáveis); index.html → sem cache
+    app.use('/assets', express_1.default.static(path_1.default.join(clientDist, 'assets'), {
+        maxAge: '1y',
+        immutable: true,
+    }));
+    app.use(express_1.default.static(clientDist, { maxAge: 0, etag: false }));
+    // SPA fallback — index.html nunca deve ser cacheado pela CDN
+    app.get(/^(?!\/api\/).*/, (_req, res) => {
+        res.setHeader('Cache-Control', 'no-store');
+        res.sendFile(path_1.default.join(clientDist, 'index.html'));
+    });
 }
 app.use(error_1.notFound);
 app.use(error_1.errorHandler);
