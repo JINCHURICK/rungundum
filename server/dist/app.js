@@ -76,8 +76,7 @@ const globalLimiter = (0, express_rate_limit_1.default)({
     message: { error: 'Demasiadas requisições. Aguarda alguns minutos.' },
 });
 app.use(globalLimiter);
-// Servir uploads locais — paths são IDs aleatórios (cuid/timestamp), não enumeráveis
-// Em produção, usar Cloudinary que tem controlo de acesso próprio
+// Servir uploads locais — paths são IDs aleatórios (timestamp), não enumeráveis
 app.use('/uploads', express_1.default.static(path_1.default.join(__dirname, '..', 'uploads')));
 app.get('/health', (_, res) => res.json({ status: 'ok', version: '1.0.2', timestamp: new Date().toISOString() }));
 // Prisma's Rust/Tokio engine needs ~2s to initialize on Hostinger shared hosting.

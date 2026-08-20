@@ -225,9 +225,7 @@ async function _doCloudinaryUpload(
 
 export async function uploadToCloudinary(buffer: Buffer, folder: string): Promise<string> {
   const detectedMime = validateImageBuffer(buffer)
-  const hasCloudinary = process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_KEY.trim() !== ''
-  if (!hasCloudinary) return saveLocally(buffer, folder, detectedMime)
-  return _doCloudinaryUpload(buffer, folder, 'image', { transformation: [{ quality: 'auto', fetch_format: 'auto' }] })
+  return saveLocally(buffer, folder, detectedMime)
 }
 
 // Para comprovantes de pagamento — aceita imagens e PDF, sempre guarda localmente.

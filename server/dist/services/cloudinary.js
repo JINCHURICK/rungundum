@@ -225,10 +225,7 @@ async function _doCloudinaryUpload(buffer, folder, resourceType, extraOptions = 
 }
 async function uploadToCloudinary(buffer, folder) {
     const detectedMime = validateImageBuffer(buffer);
-    const hasCloudinary = process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_KEY.trim() !== '';
-    if (!hasCloudinary)
-        return saveLocally(buffer, folder, detectedMime);
-    return _doCloudinaryUpload(buffer, folder, 'image', { transformation: [{ quality: 'auto', fetch_format: 'auto' }] });
+    return saveLocally(buffer, folder, detectedMime);
 }
 // Para comprovantes de pagamento — aceita imagens e PDF, sempre guarda localmente.
 // Cloudinary raw resources retornam 401 de forma inconsistente nesta conta;

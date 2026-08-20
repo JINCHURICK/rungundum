@@ -80,8 +80,7 @@ const globalLimiter = rateLimit({
 })
 app.use(globalLimiter)
 
-// Servir uploads locais — paths são IDs aleatórios (cuid/timestamp), não enumeráveis
-// Em produção, usar Cloudinary que tem controlo de acesso próprio
+// Servir uploads locais — paths são IDs aleatórios (timestamp), não enumeráveis
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')))
 
 app.get('/health', (_, res) => res.json({ status: 'ok', version: '1.0.2', timestamp: new Date().toISOString() }))
