@@ -102,6 +102,7 @@ export function invalidateClubStatusCache(clubId: string) {
 export function requireRole(...roles: string[]) {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!req.user) return res.status(401).json({ error: 'Não autenticado' })
+    if (req.user.platformAdmin) return next()
     if (!roles.includes(req.user.role)) {
       return res.status(403).json({ error: 'Permissão insuficiente' })
     }
@@ -112,6 +113,7 @@ export function requireRole(...roles: string[]) {
 export function requirePermission(perm: PermKey) {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!req.user) return res.status(401).json({ error: 'Não autenticado' })
+    if (req.user.platformAdmin) return next()
     if (!can(req.user.role, perm)) {
       return res.status(403).json({ error: 'Permissão insuficiente para esta acção' })
     }

@@ -100,6 +100,8 @@ function requireRole(...roles) {
     return (req, res, next) => {
         if (!req.user)
             return res.status(401).json({ error: 'Não autenticado' });
+        if (req.user.platformAdmin)
+            return next();
         if (!roles.includes(req.user.role)) {
             return res.status(403).json({ error: 'Permissão insuficiente' });
         }
@@ -110,6 +112,8 @@ function requirePermission(perm) {
     return (req, res, next) => {
         if (!req.user)
             return res.status(401).json({ error: 'Não autenticado' });
+        if (req.user.platformAdmin)
+            return next();
         if (!(0, permissions_1.can)(req.user.role, perm)) {
             return res.status(403).json({ error: 'Permissão insuficiente para esta acção' });
         }
