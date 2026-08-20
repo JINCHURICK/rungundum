@@ -160,13 +160,16 @@ export default function MyProfile() {
                 )}
                 <button
                   onClick={() => photoRef.current?.click()}
-                  className="absolute bottom-0 right-0 w-8 h-8 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-sm hover:bg-gray-50 transition-colors"
+                  disabled={photoMutation.isPending}
+                  className="absolute bottom-0 right-0 w-8 h-8 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-sm hover:bg-gray-50 transition-colors disabled:opacity-50"
                   title="Alterar foto"
                 >
-                  <Upload size={13} />
+                  {photoMutation.isPending
+                    ? <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" />
+                    : <Upload size={13} />}
                 </button>
               </div>
-              <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) photoMutation.mutate(f) }} />
+              <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) photoMutation.mutate(f); e.currentTarget.value = '' }} />
               <input
                 ref={vehiclePhotoRef}
                 type="file"

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { randomBytes } from 'crypto'
 import { prisma } from '../lib/prisma'
 import { authenticate, requirePermission, AuthRequest } from '../middleware/auth'
+import { can } from '../lib/permissions'
 import { uploadToCloudinary } from '../services/cloudinary'
 import { sendAccountInvite, sendWelcomeEmail } from '../services/email'
 import multer from 'multer'
@@ -263,10 +264,14 @@ router.patch('/:id', requirePermission('MEMBERS_WRITE'), async (req: AuthRequest
 })
 
 // POST /api/members/:id/photo
-router.post('/:id/photo', requirePermission('MEMBERS_WRITE'), upload.single('photo'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/:id/photo', upload.single('photo'), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const member = await prisma.member.findFirst({ where: { id: req.params.id, clubId: req.user!.clubId } })
     if (!member) return res.status(404).json({ error: 'Membro não encontrado' })
+    // Permitir se tem permissão de edição OU se está a actualizar a própria foto
+    const canEdit = can(req.user!.role, 'MEMBERS_WRITE')
+    const isSelf = member.userId === req.user!.userId
+    if (!canEdit && !isSelf) return res.status(403).json({ error: 'Permissão insuficiente' })
     if (!req.file) return res.status(400).json({ error: 'Ficheiro em falta' })
     const url = await uploadToCloudinary(req.file.buffer, `clubs/${req.user!.clubId}/members/${req.params.id}`)
     const updated = await prisma.member.update({ where: { id: req.params.id }, data: { photoUrl: url } })

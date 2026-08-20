@@ -8,6 +8,7 @@ const zod_1 = require("zod");
 const crypto_1 = require("crypto");
 const prisma_1 = require("../lib/prisma");
 const auth_1 = require("../middleware/auth");
+const permissions_1 = require("../lib/permissions");
 const cloudinary_1 = require("../services/cloudinary");
 const email_1 = require("../services/email");
 const multer_1 = __importDefault(require("multer"));
@@ -246,11 +247,16 @@ router.patch('/:id', (0, auth_1.requirePermission)('MEMBERS_WRITE'), async (req,
     }
 });
 // POST /api/members/:id/photo
-router.post('/:id/photo', (0, auth_1.requirePermission)('MEMBERS_WRITE'), upload.single('photo'), async (req, res, next) => {
+router.post('/:id/photo', upload.single('photo'), async (req, res, next) => {
     try {
         const member = await prisma_1.prisma.member.findFirst({ where: { id: req.params.id, clubId: req.user.clubId } });
         if (!member)
             return res.status(404).json({ error: 'Membro não encontrado' });
+        // Permitir se tem permissão de edição OU se está a actualizar a própria foto
+        const canEdit = (0, permissions_1.can)(req.user.role, 'MEMBERS_WRITE');
+        const isSelf = member.userId === req.user.userId;
+        if (!canEdit && !isSelf)
+            return res.status(403).json({ error: 'Permissão insuficiente' });
         if (!req.file)
             return res.status(400).json({ error: 'Ficheiro em falta' });
         const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${req.user.clubId}/members/${req.params.id}`);
