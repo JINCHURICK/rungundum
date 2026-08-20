@@ -124,6 +124,13 @@ export declare function sendWelcomeEmail(params: {
     password: string;
     verifyUrl: string;
 }): Promise<void>;
+export declare function sendAnnouncementEmail(params: {
+    to: string;
+    memberName: string;
+    clubName: string;
+    title: string;
+    body: string;
+}): Promise<void>;
 export declare function sendRaidReminder(params: {
     to: string;
     memberName: string;

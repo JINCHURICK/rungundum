@@ -20,6 +20,7 @@ exports.sendFineEmail = sendFineEmail;
 exports.sendSuspensionEmail = sendSuspensionEmail;
 exports.sendRaidInvite = sendRaidInvite;
 exports.sendWelcomeEmail = sendWelcomeEmail;
+exports.sendAnnouncementEmail = sendAnnouncementEmail;
 exports.sendRaidReminder = sendRaidReminder;
 const nodemailer_1 = __importDefault(require("nodemailer"));
 function escapeHtml(s) {
@@ -462,6 +463,29 @@ async function sendWelcomeEmail(params) {
           <p style="font-size:13px;color:#6b7280;margin-bottom:4px"><strong>Passo 2</strong> — Após confirmar, entra com o email e a password acima.</p>
           <p style="font-size:12px;color:#9ca3af;margin-top:16px">Por segurança, altera a tua password após o primeiro acesso em <em>Conta → Alterar Password</em>.</p>
           <p style="font-size:12px;color:#9ca3af;margin-top:4px">${clubName} · Rungundum</p>
+        </div>
+      </div>
+    `,
+    });
+}
+async function sendAnnouncementEmail(params) {
+    const club = escapeHtml(params.clubName);
+    const member = escapeHtml(params.memberName);
+    const title = escapeHtml(params.title);
+    const body = params.body.split('\n').map(escapeHtml).join('<br>');
+    await send({
+        to: params.to,
+        subject: `[${club}] ${params.title}`,
+        html: `
+      <div style="max-width:600px;margin:0 auto;font-family:sans-serif;color:#1f2937">
+        <div style="background:#dc2626;padding:16px 24px;border-radius:8px 8px 0 0">
+          <span style="color:white;font-size:15px;font-weight:bold">📢 ${title}</span>
+        </div>
+        <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+          <p>Olá <strong>${member}</strong>,</p>
+          <div style="background:#f9fafb;border-left:4px solid #dc2626;padding:16px;border-radius:0 6px 6px 0;margin:16px 0;line-height:1.6">${body}</div>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0">
+          <p style="color:#9ca3af;font-size:12px">${club} · Rungundum</p>
         </div>
       </div>
     `,

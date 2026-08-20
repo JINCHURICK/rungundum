@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
-import { Megaphone, Pin, Plus, X, Pencil } from 'lucide-react'
+import { Megaphone, Pin, Plus, X, Pencil, Mail, MessageSquare } from 'lucide-react'
 import { useAuthStore } from '@/store/auth'
 
 interface Announcement {
@@ -23,12 +23,13 @@ function fmt(d: string) {
   return new Date(d).toLocaleDateString('pt-AO', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-const emptyForm = { title: '', body: '', pinned: false }
+type NotifyMode = 'none' | 'sms' | 'email' | 'both'
+const emptyForm = { title: '', body: '', pinned: false, notify: 'none' as NotifyMode }
 
 export default function Announcements() {
   const qc = useQueryClient()
   const { user } = useAuthStore()
-  const isAdmin = ['ADMIN', 'CAPTAIN'].includes(user?.role ?? '')
+  const isAdmin = ['ADMIN', 'CAPTAIN'].includes(user?.role ?? '') || user?.platformAdmin === true
 
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing]     = useState<Announcement | null>(null)
@@ -62,7 +63,7 @@ export default function Announcements() {
   function openCreate() { setEditing(null); setForm(emptyForm); setShowModal(true) }
   function openEdit(a: Announcement) {
     setEditing(a)
-    setForm({ title: a.title, body: a.body, pinned: a.pinned })
+    setForm({ title: a.title, body: a.body, pinned: a.pinned, notify: 'none' })
     setShowModal(true)
   }
   function closeModal() { setShowModal(false); setEditing(null) }
@@ -143,6 +144,33 @@ export default function Announcements() {
               onChange={e => setForm(f => ({ ...f, pinned: e.target.checked }))} />
             <span className="text-sm text-gray-700">Fixar no topo</span>
           </label>
+          {!editing && (
+            <div>
+              <p className="text-xs font-medium text-gray-600 mb-2">Notificar membros</p>
+              <div className="grid grid-cols-4 gap-2">
+                {([
+                  { value: 'none',  label: 'Não notificar', icon: null },
+                  { value: 'sms',   label: 'SMS',           icon: <MessageSquare size={13} /> },
+                  { value: 'email', label: 'Email',         icon: <Mail size={13} /> },
+                  { value: 'both',  label: 'SMS + Email',   icon: <><MessageSquare size={11} /><Mail size={11} /></> },
+                ] as { value: NotifyMode; label: string; icon: React.ReactNode }[]).map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, notify: opt.value }))}
+                    className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border text-xs font-medium transition-all ${
+                      form.notify === opt.value
+                        ? 'border-[var(--accent)] bg-red-50 text-[var(--accent)]'
+                        : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                    }`}
+                  >
+                    {opt.icon && <span className="flex gap-0.5">{opt.icon}</span>}
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="flex gap-3 justify-end pt-2">
             <Button variant="secondary" onClick={closeModal}>Cancelar</Button>
             <Button

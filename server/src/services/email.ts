@@ -487,6 +487,30 @@ export async function sendWelcomeEmail(params: { to: string; memberName: string;
   })
 }
 
+export async function sendAnnouncementEmail(params: { to: string; memberName: string; clubName: string; title: string; body: string }) {
+  const club   = escapeHtml(params.clubName)
+  const member = escapeHtml(params.memberName)
+  const title  = escapeHtml(params.title)
+  const body   = params.body.split('\n').map(escapeHtml).join('<br>')
+  await send({
+    to: params.to,
+    subject: `[${club}] ${params.title}`,
+    html: `
+      <div style="max-width:600px;margin:0 auto;font-family:sans-serif;color:#1f2937">
+        <div style="background:#dc2626;padding:16px 24px;border-radius:8px 8px 0 0">
+          <span style="color:white;font-size:15px;font-weight:bold">📢 ${title}</span>
+        </div>
+        <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+          <p>Olá <strong>${member}</strong>,</p>
+          <div style="background:#f9fafb;border-left:4px solid #dc2626;padding:16px;border-radius:0 6px 6px 0;margin:16px 0;line-height:1.6">${body}</div>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0">
+          <p style="color:#9ca3af;font-size:12px">${club} · Rungundum</p>
+        </div>
+      </div>
+    `,
+  })
+}
+
 export async function sendRaidReminder(params: { to: string; memberName: string; raidTitle: string; raidDate: string; clubName: string; confirmUrl: string }) {
   const clubName   = escapeHtml(params.clubName)
   const memberName = escapeHtml(params.memberName)

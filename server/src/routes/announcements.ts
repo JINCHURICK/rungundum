@@ -3,6 +3,38 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { authenticate, requirePermission, AuthRequest } from '../middleware/auth'
 import { createNotificationForAllMembers } from '../services/notifications'
+import { sendBulkSms } from '../services/sms'
+import { getNotificationMode } from '../lib/notificationMode'
+
+async function notifyMembers(clubId: string, clubName: string, title: string, body: string, notify: 'sms' | 'email' | 'both') {
+  const members = await prisma.member.findMany({
+    where: { clubId, status: 'ACTIVE' },
+    include: { user: { select: { email: true } } },
+  })
+
+  const { sms: canSms, email: canEmail } = await getNotificationMode(clubId)
+  const preview = body.length > 100 ? body.slice(0, 97) + '...' : body
+  const smsMsg = `${clubName} | ${title}: ${preview}`
+
+  if ((notify === 'sms' || notify === 'both') && canSms) {
+    const phones = members.map(m => m.phone).filter(Boolean) as string[]
+    if (phones.length > 0) sendBulkSms(phones, smsMsg).catch(() => {})
+  }
+
+  if ((notify === 'email' || notify === 'both') && canEmail) {
+    const { sendAnnouncementEmail } = await import('../services/email')
+    for (const m of members) {
+      if (!m.user?.email) continue
+      sendAnnouncementEmail({
+        to: m.user.email,
+        memberName: m.nickname ?? m.fullName,
+        clubName,
+        title,
+        body,
+      }).catch(() => {})
+    }
+  }
+}
 
 const router = Router()
 router.use(authenticate)
@@ -23,6 +55,7 @@ router.post('/', requirePermission('ANNOUNCEMENTS_WRITE'), async (req: AuthReque
       title:  z.string().min(1),
       body:   z.string().min(1),
       pinned: z.boolean().default(false),
+      notify: z.enum(['none', 'sms', 'email', 'both']).default('none'),
     }).parse(req.body)
 
     const ann = await prisma.announcement.create({
@@ -42,6 +75,11 @@ router.post('/', requirePermission('ANNOUNCEMENTS_WRITE'), async (req: AuthReque
       body: data.body.length > 100 ? data.body.slice(0, 97) + '…' : data.body,
       link: '/announcements',
     }).catch(() => {})
+
+    if (data.notify !== 'none') {
+      const club = await prisma.club.findUnique({ where: { id: req.user!.clubId }, select: { name: true } })
+      notifyMembers(req.user!.clubId, club?.name ?? 'Clube', data.title, data.body, data.notify).catch(() => {})
+    }
 
     return res.status(201).json(ann)
   } catch (err) {
