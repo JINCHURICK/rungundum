@@ -2,6 +2,7 @@ import { v2 as cloudinary } from 'cloudinary'
 import sharp from 'sharp'
 import fs from 'fs'
 import path from 'path'
+import { createHash } from 'crypto'
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -79,8 +80,13 @@ function saveLocally(buffer: Buffer, folder: string, detectedMime: string): stri
     throw new Error('Caminho de upload invalido.')
   }
   ensureDir(resolvedDir)
-  const filename = `${Date.now()}.${ext}`
-  fs.writeFileSync(path.join(resolvedDir, filename), buffer)
+  // Nome baseado no hash do conteudo: mesma imagem = mesmo ficheiro (deduplicacao automatica)
+  const hash = createHash('sha256').update(buffer).digest('hex').slice(0, 24)
+  const filename = `${hash}.${ext}`
+  const filePath = path.join(resolvedDir, filename)
+  if (!fs.existsSync(filePath)) {
+    fs.writeFileSync(filePath, buffer)
+  }
   return `/uploads/${safeFolder}/${filename}`
 }
 

@@ -14,6 +14,7 @@ const cloudinary_1 = require("cloudinary");
 const sharp_1 = __importDefault(require("sharp"));
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
+const crypto_1 = require("crypto");
 cloudinary_1.v2.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
@@ -87,8 +88,13 @@ function saveLocally(buffer, folder, detectedMime) {
         throw new Error('Caminho de upload invalido.');
     }
     ensureDir(resolvedDir);
-    const filename = `${Date.now()}.${ext}`;
-    fs_1.default.writeFileSync(path_1.default.join(resolvedDir, filename), buffer);
+    // Nome baseado no hash do conteudo: mesma imagem = mesmo ficheiro (deduplicacao automatica)
+    const hash = (0, crypto_1.createHash)('sha256').update(buffer).digest('hex').slice(0, 24);
+    const filename = `${hash}.${ext}`;
+    const filePath = path_1.default.join(resolvedDir, filename);
+    if (!fs_1.default.existsSync(filePath)) {
+        fs_1.default.writeFileSync(filePath, buffer);
+    }
     return `/uploads/${safeFolder}/${filename}`;
 }
 // Cache de imagens para PDFs: evita re-descarregar a mesma foto em geracoes consecutivas
