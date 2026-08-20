@@ -122,7 +122,7 @@ export declare function sendWelcomeEmail(params: {
     memberName: string;
     clubName: string;
     password: string;
-    loginUrl: string;
+    verifyUrl: string;
 }): Promise<void>;
 export declare function sendRaidReminder(params: {
     to: string;

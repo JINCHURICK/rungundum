@@ -140,6 +140,7 @@ router.post('/', requirePermission('MEMBERS_WRITE'), async (req: AuthRequest, re
 
     const { email, password, role, birthDate, licenseExpiresAt, ...memberData } = data
 
+    let verificationToken: string | undefined
     const result = await prisma.$transaction(async (tx) => {
       let userId: string | undefined
 
@@ -147,8 +148,16 @@ router.post('/', requirePermission('MEMBERS_WRITE'), async (req: AuthRequest, re
         const existing = await tx.user.findUnique({ where: { email } })
         if (existing) throw new Error('Email já registado')
         const passwordHash = await bcrypt.hash(password, 12)
+        verificationToken = randomBytes(32).toString('hex')
         const user = await tx.user.create({
-          data: { clubId: req.user!.clubId, email, passwordHash, role: role ?? 'MEMBER' },
+          data: {
+            clubId: req.user!.clubId,
+            email,
+            passwordHash,
+            role: role ?? 'MEMBER',
+            verificationToken,
+            verificationExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          },
         })
         userId = user.id
       }
@@ -166,16 +175,16 @@ router.post('/', requirePermission('MEMBERS_WRITE'), async (req: AuthRequest, re
       return member
     })
 
-    // Enviar email de boas-vindas se foi criada conta com email + password
-    if (email && password) {
+    // Enviar email de boas-vindas + link de verificação se foi criada conta
+    if (email && password && verificationToken) {
       const club = await prisma.club.findUnique({ where: { id: req.user!.clubId }, select: { name: true } })
-      const loginUrl = `${process.env.CLIENT_URL ?? 'https://rungundum.com'}/login`
+      const clientUrl = process.env.CLIENT_URL ?? 'https://rungundum.com'
       sendWelcomeEmail({
         to: email,
         memberName: memberData.fullName,
         clubName: club?.name ?? 'Rungundum',
         password,
-        loginUrl,
+        verifyUrl: `${clientUrl}/verify-email/${verificationToken}`,
       }).catch((err) => console.error('[members] Erro ao enviar email de boas-vindas:', err))
     }
 

@@ -448,12 +448,12 @@ export async function sendRaidInvite(params: { to: string; memberName: string; r
   })
 }
 
-export async function sendWelcomeEmail(params: { to: string; memberName: string; clubName: string; password: string; loginUrl: string }) {
+export async function sendWelcomeEmail(params: { to: string; memberName: string; clubName: string; password: string; verifyUrl: string }) {
   const clubName   = escapeHtml(params.clubName)
   const memberName = escapeHtml(params.memberName)
   await send({
     to: params.to,
-    subject: `Bem-vindo ao ${clubName}! — As tuas credenciais de acesso`,
+    subject: `Bem-vindo ao ${clubName}! — Activa a tua conta`,
     html: `
       <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto">
         <div style="background:#dc2626;padding:24px 28px;border-radius:8px 8px 0 0">
@@ -461,7 +461,7 @@ export async function sendWelcomeEmail(params: { to: string; memberName: string;
         </div>
         <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;padding:28px;border-radius:0 0 8px 8px">
           <p style="font-size:15px;color:#1a2035">Olá <strong>${memberName}</strong>,</p>
-          <p style="font-size:14px;color:#4b5563">A tua conta no Rungundum foi criada com sucesso. Podes agora aceder à plataforma do clube com as credenciais abaixo.</p>
+          <p style="font-size:14px;color:#4b5563">A tua conta no Rungundum foi criada pelo administrador do clube. Guarda as tuas credenciais de acesso e clica no botão abaixo para activar a conta.</p>
           <table style="width:100%;border-collapse:collapse;margin:20px 0;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px">
             <tr>
               <td style="padding:12px 16px;font-size:13px;font-weight:600;color:#6b7280;border-bottom:1px solid #e5e7eb;width:40%">Email</td>
@@ -472,10 +472,14 @@ export async function sendWelcomeEmail(params: { to: string; memberName: string;
               <td style="padding:12px 16px;font-size:13px;color:#1a2035;font-family:monospace">${escapeHtml(params.password)}</td>
             </tr>
           </table>
-          <a href="${params.loginUrl}" style="background:#dc2626;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:8px 0;font-size:14px;font-weight:600">
-            Entrar na plataforma →
+          <p style="font-size:14px;color:#1a2035;font-weight:600;margin-bottom:8px">Passo 1 — Confirma o teu email</p>
+          <p style="font-size:13px;color:#4b5563;margin-bottom:12px">Clica no botão abaixo para confirmar o teu endereço de email e activar o acesso. O link expira em 24 horas.</p>
+          <a href="${params.verifyUrl}" style="background:#dc2626;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin-bottom:20px;font-size:14px;font-weight:600">
+            Confirmar email e activar conta →
           </a>
-          <p style="font-size:13px;color:#9ca3af;margin-top:20px">Por segurança, altera a tua password após o primeiro acesso em <em>Conta → Alterar Password</em>.</p>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0">
+          <p style="font-size:13px;color:#6b7280;margin-bottom:4px"><strong>Passo 2</strong> — Após confirmar, entra com o email e a password acima.</p>
+          <p style="font-size:12px;color:#9ca3af;margin-top:16px">Por segurança, altera a tua password após o primeiro acesso em <em>Conta → Alterar Password</em>.</p>
           <p style="font-size:12px;color:#9ca3af;margin-top:4px">${clubName} · Rungundum</p>
         </div>
       </div>

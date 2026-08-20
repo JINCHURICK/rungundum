@@ -129,6 +129,7 @@ router.post('/', (0, auth_1.requirePermission)('MEMBERS_WRITE'), async (req, res
                 return res.status(402).json(limitErr);
         }
         const { email, password, role, birthDate, licenseExpiresAt, ...memberData } = data;
+        let verificationToken;
         const result = await prisma_1.prisma.$transaction(async (tx) => {
             let userId;
             if (email && password) {
@@ -136,8 +137,16 @@ router.post('/', (0, auth_1.requirePermission)('MEMBERS_WRITE'), async (req, res
                 if (existing)
                     throw new Error('Email já registado');
                 const passwordHash = await bcryptjs_1.default.hash(password, 12);
+                verificationToken = (0, crypto_1.randomBytes)(32).toString('hex');
                 const user = await tx.user.create({
-                    data: { clubId: req.user.clubId, email, passwordHash, role: role ?? 'MEMBER' },
+                    data: {
+                        clubId: req.user.clubId,
+                        email,
+                        passwordHash,
+                        role: role ?? 'MEMBER',
+                        verificationToken,
+                        verificationExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+                    },
                 });
                 userId = user.id;
             }
@@ -153,16 +162,16 @@ router.post('/', (0, auth_1.requirePermission)('MEMBERS_WRITE'), async (req, res
             });
             return member;
         });
-        // Enviar email de boas-vindas se foi criada conta com email + password
-        if (email && password) {
+        // Enviar email de boas-vindas + link de verificação se foi criada conta
+        if (email && password && verificationToken) {
             const club = await prisma_1.prisma.club.findUnique({ where: { id: req.user.clubId }, select: { name: true } });
-            const loginUrl = `${process.env.CLIENT_URL ?? 'https://rungundum.com'}/login`;
+            const clientUrl = process.env.CLIENT_URL ?? 'https://rungundum.com';
             (0, email_1.sendWelcomeEmail)({
                 to: email,
                 memberName: memberData.fullName,
                 clubName: club?.name ?? 'Rungundum',
                 password,
-                loginUrl,
+                verifyUrl: `${clientUrl}/verify-email/${verificationToken}`,
             }).catch((err) => console.error('[members] Erro ao enviar email de boas-vindas:', err));
         }
         return res.status(201).json(result);
