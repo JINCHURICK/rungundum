@@ -1,9 +1,10 @@
+export declare function slugify(str: string): string;
 export declare function validateImageBuffer(buffer: Buffer): string;
 export declare function validateDocumentBuffer(buffer: Buffer): string;
 /**
  * Converte qualquer URL de imagem para data URI que o Puppeteer consegue renderizar.
- * URLs externas (Cloudinary) são redimensionadas e cacheadas em memória.
- * URLs locais são lidas do disco.
+ * URLs externas (Cloudinary) sao redimensionadas e cacheadas em memoria.
+ * URLs locais sao lidas do disco.
  * Protegido contra path traversal.
  */
 export declare function resolveImageForPuppeteer(url: string | null | undefined): Promise<string | null>;

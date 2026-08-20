@@ -63,7 +63,9 @@ router.post('/me/logo', (0, auth_1.requireRole)('ADMIN'), upload.single('logo'),
     try {
         if (!req.file)
             return res.status(400).json({ error: 'Ficheiro em falta' });
-        const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${req.user.clubId}/logo`);
+        const clubInfo = await prisma_1.prisma.club.findUnique({ where: { id: req.user.clubId }, select: { acronym: true, name: true } });
+        const clubSlug = (0, cloudinary_1.slugify)(clubInfo?.acronym || clubInfo?.name || req.user.clubId);
+        const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${clubSlug}/logo`);
         const club = await prisma_1.prisma.club.update({ where: { id: req.user.clubId }, data: { logoUrl: url } });
         return res.json({ logoUrl: club.logoUrl });
     }
@@ -76,7 +78,9 @@ router.post('/me/second-logo', (0, auth_1.requireRole)('ADMIN'), upload.single('
     try {
         if (!req.file)
             return res.status(400).json({ error: 'Ficheiro em falta' });
-        const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${req.user.clubId}/second-logo`);
+        const clubInfo = await prisma_1.prisma.club.findUnique({ where: { id: req.user.clubId }, select: { acronym: true, name: true } });
+        const clubSlug = (0, cloudinary_1.slugify)(clubInfo?.acronym || clubInfo?.name || req.user.clubId);
+        const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${clubSlug}/second-logo`);
         const club = await prisma_1.prisma.club.update({ where: { id: req.user.clubId }, data: { secondLogoUrl: url } });
         return res.json({ secondLogoUrl: club.secondLogoUrl });
     }
@@ -181,7 +185,10 @@ router.post('/me/hand-signals/:id/image', (0, auth_1.requireRole)('ADMIN', 'CAPT
         const signal = await prisma_1.prisma.handSignal.findFirst({ where: { id: req.params.id, clubId: req.user.clubId } });
         if (!signal)
             return res.status(404).json({ error: 'Sinal não encontrado' });
-        const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${req.user.clubId}/hand-signals/${req.params.id}`);
+        const clubInfo = await prisma_1.prisma.club.findUnique({ where: { id: req.user.clubId }, select: { acronym: true, name: true } });
+        const clubSlug = (0, cloudinary_1.slugify)(clubInfo?.acronym || clubInfo?.name || req.user.clubId);
+        const signalSlug = (0, cloudinary_1.slugify)(signal.name);
+        const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${clubSlug}/hand-signals/${signalSlug}`);
         const updated = await prisma_1.prisma.handSignal.update({ where: { id: req.params.id }, data: { imageUrl: url } });
         return res.json({ imageUrl: updated.imageUrl });
     }

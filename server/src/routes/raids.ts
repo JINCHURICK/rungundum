@@ -5,7 +5,7 @@ import multer from 'multer'
 import { prisma } from '../lib/prisma'
 import { authenticate, requireRole, AuthRequest } from '../middleware/auth'
 import { sendRaidPublished } from '../services/email'
-import { uploadToCloudinary } from '../services/cloudinary'
+import { uploadToCloudinary, slugify } from '../services/cloudinary'
 import { awardLeaguePointsForRaid } from './leagues'
 import { createNotification } from '../services/notifications'
 import { getNotificationMode } from '../lib/notificationMode'
@@ -368,7 +368,10 @@ router.post('/:id/photos', upload.single('photo'), async (req: AuthRequest, res:
     if (!raid) return res.status(404).json({ error: 'Raid não encontrado' })
     if (!req.file) return res.status(400).json({ error: 'Nenhum ficheiro enviado' })
     const caption = typeof req.body.caption === 'string' ? req.body.caption : undefined
-    const url = await uploadToCloudinary(req.file.buffer, `clubs/${req.user!.clubId}/raids/${raid.id}/photos`)
+    const clubInfo = await prisma.club.findUnique({ where: { id: req.user!.clubId }, select: { acronym: true, name: true } })
+    const clubSlug = slugify(clubInfo?.acronym || clubInfo?.name || req.user!.clubId)
+    const raidSlug = slugify(raid.title)
+    const url = await uploadToCloudinary(req.file.buffer, `clubs/${clubSlug}/raids/${raidSlug}/photos`)
     const photo = await prisma.raidPhoto.create({
       data: { raidId: raid.id, url, caption, uploadedById: req.user!.userId },
     })

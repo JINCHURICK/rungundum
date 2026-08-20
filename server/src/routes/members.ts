@@ -4,7 +4,7 @@ import { randomBytes } from 'crypto'
 import { prisma } from '../lib/prisma'
 import { authenticate, requirePermission, AuthRequest } from '../middleware/auth'
 import { can } from '../lib/permissions'
-import { uploadToCloudinary } from '../services/cloudinary'
+import { uploadToCloudinary, slugify } from '../services/cloudinary'
 import { sendAccountInvite, sendWelcomeEmail } from '../services/email'
 import multer from 'multer'
 import bcrypt from 'bcryptjs'
@@ -273,7 +273,10 @@ router.post('/:id/photo', upload.single('photo'), async (req: AuthRequest, res: 
     const isSelf = member.userId === req.user!.userId
     if (!canEdit && !isSelf) return res.status(403).json({ error: 'Permissão insuficiente' })
     if (!req.file) return res.status(400).json({ error: 'Ficheiro em falta' })
-    const url = await uploadToCloudinary(req.file.buffer, `clubs/${req.user!.clubId}/members/${req.params.id}`)
+    const club = await prisma.club.findUnique({ where: { id: req.user!.clubId }, select: { acronym: true, name: true } })
+    const clubSlug = slugify(club?.acronym || club?.name || req.user!.clubId)
+    const memberSlug = slugify(member.nickname || member.fullName)
+    const url = await uploadToCloudinary(req.file.buffer, `clubs/${clubSlug}/members/${memberSlug}`)
     const updated = await prisma.member.update({ where: { id: req.params.id }, data: { photoUrl: url } })
     return res.json({ photoUrl: updated.photoUrl })
   } catch (err) { next(err) }
@@ -383,7 +386,10 @@ router.post('/:memberId/vehicles/:vehicleId/photo', upload.single('photo'), asyn
     const vehicle = await prisma.vehicle.findFirst({ where: { id: req.params.vehicleId, memberId: req.params.memberId } })
     if (!vehicle) return res.status(404).json({ error: 'Veículo não encontrado' })
     if (!req.file) return res.status(400).json({ error: 'Ficheiro em falta' })
-    const url = await uploadToCloudinary(req.file.buffer, `clubs/${req.user!.clubId}/vehicles/${req.params.vehicleId}`)
+    const club = await prisma.club.findUnique({ where: { id: req.user!.clubId }, select: { acronym: true, name: true } })
+    const clubSlug = slugify(club?.acronym || club?.name || req.user!.clubId)
+    const vehicleSlug = slugify(`${vehicle.brand}-${vehicle.model}`)
+    const url = await uploadToCloudinary(req.file.buffer, `clubs/${clubSlug}/vehicles/${vehicleSlug}`)
     const updated = await prisma.vehicle.update({ where: { id: vehicle.id }, data: { photoUrl: url } })
     return res.json({ photoUrl: updated.photoUrl })
   } catch (err) { next(err) }

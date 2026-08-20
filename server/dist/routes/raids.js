@@ -342,7 +342,10 @@ router.post('/:id/photos', upload.single('photo'), async (req, res, next) => {
         if (!req.file)
             return res.status(400).json({ error: 'Nenhum ficheiro enviado' });
         const caption = typeof req.body.caption === 'string' ? req.body.caption : undefined;
-        const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${req.user.clubId}/raids/${raid.id}/photos`);
+        const clubInfo = await prisma_1.prisma.club.findUnique({ where: { id: req.user.clubId }, select: { acronym: true, name: true } });
+        const clubSlug = (0, cloudinary_1.slugify)(clubInfo?.acronym || clubInfo?.name || req.user.clubId);
+        const raidSlug = (0, cloudinary_1.slugify)(raid.title);
+        const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${clubSlug}/raids/${raidSlug}/photos`);
         const photo = await prisma_1.prisma.raidPhoto.create({
             data: { raidId: raid.id, url, caption, uploadedById: req.user.userId },
         });

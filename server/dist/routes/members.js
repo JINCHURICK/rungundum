@@ -259,7 +259,10 @@ router.post('/:id/photo', upload.single('photo'), async (req, res, next) => {
             return res.status(403).json({ error: 'Permissão insuficiente' });
         if (!req.file)
             return res.status(400).json({ error: 'Ficheiro em falta' });
-        const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${req.user.clubId}/members/${req.params.id}`);
+        const club = await prisma_1.prisma.club.findUnique({ where: { id: req.user.clubId }, select: { acronym: true, name: true } });
+        const clubSlug = (0, cloudinary_1.slugify)(club?.acronym || club?.name || req.user.clubId);
+        const memberSlug = (0, cloudinary_1.slugify)(member.nickname || member.fullName);
+        const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${clubSlug}/members/${memberSlug}`);
         const updated = await prisma_1.prisma.member.update({ where: { id: req.params.id }, data: { photoUrl: url } });
         return res.json({ photoUrl: updated.photoUrl });
     }
@@ -371,7 +374,10 @@ router.post('/:memberId/vehicles/:vehicleId/photo', upload.single('photo'), asyn
             return res.status(404).json({ error: 'Veículo não encontrado' });
         if (!req.file)
             return res.status(400).json({ error: 'Ficheiro em falta' });
-        const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${req.user.clubId}/vehicles/${req.params.vehicleId}`);
+        const club = await prisma_1.prisma.club.findUnique({ where: { id: req.user.clubId }, select: { acronym: true, name: true } });
+        const clubSlug = (0, cloudinary_1.slugify)(club?.acronym || club?.name || req.user.clubId);
+        const vehicleSlug = (0, cloudinary_1.slugify)(`${vehicle.brand}-${vehicle.model}`);
+        const url = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, `clubs/${clubSlug}/vehicles/${vehicleSlug}`);
         const updated = await prisma_1.prisma.vehicle.update({ where: { id: vehicle.id }, data: { photoUrl: url } });
         return res.json({ photoUrl: updated.photoUrl });
     }

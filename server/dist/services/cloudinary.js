@@ -3,6 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.slugify = slugify;
 exports.validateImageBuffer = validateImageBuffer;
 exports.validateDocumentBuffer = validateDocumentBuffer;
 exports.resolveImageForPuppeteer = resolveImageForPuppeteer;
@@ -18,7 +19,17 @@ cloudinary_1.v2.config({
     api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 const UPLOADS_DIR = path_1.default.resolve(path_1.default.join(__dirname, '..', '..', 'uploads'));
-// Magic bytes para validação de tipo real de ficheiro
+// Converte qualquer string para slug seguro para filesystem (sem acentos, sem espacos)
+function slugify(str) {
+    return str
+        .normalize('NFKD')
+        .replace(/\p{M}/gu, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 50) || 'sem-nome';
+}
+// Magic bytes para validacao de tipo real de ficheiro
 const IMAGE_SIGNATURES = [
     { mime: 'image/jpeg', bytes: [0xFF, 0xD8, 0xFF] },
     { mime: 'image/png', bytes: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A] },
@@ -30,7 +41,7 @@ function validateImageBuffer(buffer) {
         const offset = sig.offset ?? 0;
         const match = sig.bytes.every((b, i) => buffer[offset + i] === b);
         if (match) {
-            // Validação extra para WebP: bytes 8-11 devem ser "WEBP"
+            // Validacao extra para WebP: bytes 8-11 devem ser "WEBP"
             if (sig.mime === 'image/webp') {
                 if (buffer.slice(8, 12).toString('ascii') !== 'WEBP')
                     continue;
@@ -38,9 +49,9 @@ function validateImageBuffer(buffer) {
             return sig.mime;
         }
     }
-    throw new Error('Tipo de ficheiro não permitido. Apenas JPEG, PNG, GIF ou WebP são aceites.');
+    throw new Error('Tipo de ficheiro nao permitido. Apenas JPEG, PNG, GIF ou WebP sao aceites.');
 }
-// Valida imagens OU PDF — para documentos como comprovantes de pagamento
+// Valida imagens OU PDF -- para documentos como comprovantes de pagamento
 function validateDocumentBuffer(buffer) {
     // Tentar como imagem primeiro
     try {
@@ -51,7 +62,7 @@ function validateDocumentBuffer(buffer) {
     if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) {
         return 'application/pdf';
     }
-    throw new Error('Tipo de ficheiro não permitido. Apenas JPEG, PNG, WebP ou PDF são aceites.');
+    throw new Error('Tipo de ficheiro nao permitido. Apenas JPEG, PNG, WebP ou PDF sao aceites.');
 }
 function ensureDir(dir) {
     if (!fs_1.default.existsSync(dir))
@@ -64,14 +75,14 @@ function saveLocally(buffer, folder, detectedMime) {
     const dir = path_1.default.join(UPLOADS_DIR, safeFolder);
     const resolvedDir = path_1.default.resolve(dir);
     if (!resolvedDir.startsWith(UPLOADS_DIR + path_1.default.sep) && resolvedDir !== UPLOADS_DIR) {
-        throw new Error('Caminho de upload inválido.');
+        throw new Error('Caminho de upload invalido.');
     }
     ensureDir(resolvedDir);
     const filename = `${Date.now()}.${ext}`;
     fs_1.default.writeFileSync(path_1.default.join(resolvedDir, filename), buffer);
     return `/uploads/${safeFolder}/${filename}`;
 }
-// Cache de imagens para PDFs: evita re-descarregar a mesma foto em gerações consecutivas
+// Cache de imagens para PDFs: evita re-descarregar a mesma foto em geracoes consecutivas
 const _pdfImageCache = new Map();
 const _CACHE_TTL = 15 * 60 * 1000; // 15 minutos
 const _CACHE_MAX = 100;
@@ -93,7 +104,7 @@ function _setCached(url, data) {
     }
     _pdfImageCache.set(url, { data, expires: Date.now() + _CACHE_TTL });
 }
-// Para URLs do Cloudinary, pede versão reduzida (300×300) que descarrega muito mais rápido
+// Para URLs do Cloudinary, pede versao reduzida (300x300) que descarrega muito mais rapido
 function _cloudinaryThumb(url) {
     if (!url.includes('res.cloudinary.com'))
         return url;
@@ -101,8 +112,8 @@ function _cloudinaryThumb(url) {
 }
 /**
  * Converte qualquer URL de imagem para data URI que o Puppeteer consegue renderizar.
- * URLs externas (Cloudinary) são redimensionadas e cacheadas em memória.
- * URLs locais são lidas do disco.
+ * URLs externas (Cloudinary) sao redimensionadas e cacheadas em memoria.
+ * URLs locais sao lidas do disco.
  * Protegido contra path traversal.
  */
 async function resolveImageForPuppeteer(url) {
@@ -139,11 +150,9 @@ async function resolveImageForPuppeteer(url) {
     const mimeType = ext === 'png' ? 'image/png' : ext === 'svg' ? 'image/svg+xml' : 'image/jpeg';
     return `data:${mimeType};base64,${buffer.toString('base64')}`;
 }
-// Offset entre o relógio do sistema e o UTC real (em ms).
-// Corrigido automaticamente ao receber erro "Stale request" do Cloudinary.
+// Offset entre o relogio do sistema e o UTC real (em ms).
 let clockOffsetMs = 0;
 async function calibrateClockOffset() {
-    // Tenta várias fontes de tempo em sequência
     const sources = [
         async () => {
             const res = await fetch('https://worldtimeapi.org/api/timezone/UTC', { signal: AbortSignal.timeout(4000) });
@@ -156,7 +165,6 @@ async function calibrateClockOffset() {
             return new Date(d.dateTime + 'Z').getTime();
         },
         async () => {
-            // Usa o header Date de qualquer resposta HTTPS — funciona mesmo com Cloudinary
             const res = await fetch('https://api.cloudinary.com/', { method: 'HEAD', signal: AbortSignal.timeout(4000) });
             const dateHeader = res.headers.get('date');
             if (!dateHeader)
@@ -171,29 +179,25 @@ async function calibrateClockOffset() {
             const after = Date.now();
             clockOffsetMs = realUtc - Math.round((before + after) / 2);
             if (Math.abs(clockOffsetMs) > 5000) {
-                console.warn(`[cloudinary] clock offset: ${Math.round(clockOffsetMs / 1000)}s — timestamps corrigidos`);
+                console.warn(`[cloudinary] clock offset: ${Math.round(clockOffsetMs / 1000)}s`);
             }
             return;
         }
-        catch { /* tenta próxima fonte */ }
+        catch { /* tenta proxima fonte */ }
     }
-    console.warn('[cloudinary] calibração falhou em todas as fontes — a usar relógio do sistema');
+    console.warn('[cloudinary] calibracao falhou em todas as fontes');
 }
 function getRealTimestampSeconds() {
     return Math.round((Date.now() + clockOffsetMs) / 1000);
 }
-// Extrai o timestamp enviado da mensagem de erro "Stale request"
-// e auto-corrige o offset para uploads futuros.
 function handleStaleRequest(errorMessage) {
     const match = errorMessage.match(/reported time is (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/);
     if (!match)
         return null;
     const ourSentMs = new Date(match[1] + ' +0000').getTime();
-    // O Cloudinary exige que o timestamp esteja a menos de 1h do UTC real.
-    // Adicionamos 61 minutos ao timestamp que enviámos para ficar dentro da janela.
     const correctedMs = ourSentMs + 61 * 60 * 1000;
     clockOffsetMs = correctedMs - Date.now();
-    console.warn(`[cloudinary] Stale request — offset auto-corrigido para ${Math.round(clockOffsetMs / 1000)}s`);
+    console.warn(`[cloudinary] Stale request -- offset auto-corrigido para ${Math.round(clockOffsetMs / 1000)}s`);
     return Math.round(correctedMs / 1000);
 }
 async function _doCloudinaryUpload(buffer, folder, resourceType, extraOptions = {}) {
@@ -227,9 +231,7 @@ async function uploadToCloudinary(buffer, folder) {
     const detectedMime = validateImageBuffer(buffer);
     return saveLocally(buffer, folder, detectedMime);
 }
-// Para comprovantes de pagamento — aceita imagens e PDF, sempre guarda localmente.
-// Cloudinary raw resources retornam 401 de forma inconsistente nesta conta;
-// o Express serve /uploads directamente e é mais fiável.
+// Para comprovantes de pagamento -- aceita imagens e PDF, sempre guarda localmente.
 async function uploadDocumentToCloudinary(buffer, folder) {
     const detectedMime = validateDocumentBuffer(buffer);
     return saveLocally(buffer, folder, detectedMime);

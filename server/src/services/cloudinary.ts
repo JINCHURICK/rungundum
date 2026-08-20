@@ -10,7 +10,18 @@ cloudinary.config({
 
 const UPLOADS_DIR = path.resolve(path.join(__dirname, '..', '..', 'uploads'))
 
-// Magic bytes para validação de tipo real de ficheiro
+// Converte qualquer string para slug seguro para filesystem (sem acentos, sem espacos)
+export function slugify(str: string): string {
+  return str
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 50) || 'sem-nome'
+}
+
+// Magic bytes para validacao de tipo real de ficheiro
 const IMAGE_SIGNATURES: { mime: string; bytes: number[]; offset?: number }[] = [
   { mime: 'image/jpeg', bytes: [0xFF, 0xD8, 0xFF] },
   { mime: 'image/png',  bytes: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A] },
@@ -23,17 +34,17 @@ export function validateImageBuffer(buffer: Buffer): string {
     const offset = sig.offset ?? 0
     const match = sig.bytes.every((b, i) => buffer[offset + i] === b)
     if (match) {
-      // Validação extra para WebP: bytes 8-11 devem ser "WEBP"
+      // Validacao extra para WebP: bytes 8-11 devem ser "WEBP"
       if (sig.mime === 'image/webp') {
         if (buffer.slice(8, 12).toString('ascii') !== 'WEBP') continue
       }
       return sig.mime
     }
   }
-  throw new Error('Tipo de ficheiro não permitido. Apenas JPEG, PNG, GIF ou WebP são aceites.')
+  throw new Error('Tipo de ficheiro nao permitido. Apenas JPEG, PNG, GIF ou WebP sao aceites.')
 }
 
-// Valida imagens OU PDF — para documentos como comprovantes de pagamento
+// Valida imagens OU PDF -- para documentos como comprovantes de pagamento
 export function validateDocumentBuffer(buffer: Buffer): string {
   // Tentar como imagem primeiro
   try { return validateImageBuffer(buffer) } catch {}
@@ -41,7 +52,7 @@ export function validateDocumentBuffer(buffer: Buffer): string {
   if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) {
     return 'application/pdf'
   }
-  throw new Error('Tipo de ficheiro não permitido. Apenas JPEG, PNG, WebP ou PDF são aceites.')
+  throw new Error('Tipo de ficheiro nao permitido. Apenas JPEG, PNG, WebP ou PDF sao aceites.')
 }
 
 function ensureDir(dir: string) {
@@ -55,7 +66,7 @@ function saveLocally(buffer: Buffer, folder: string, detectedMime: string): stri
   const dir = path.join(UPLOADS_DIR, safeFolder)
   const resolvedDir = path.resolve(dir)
   if (!resolvedDir.startsWith(UPLOADS_DIR + path.sep) && resolvedDir !== UPLOADS_DIR) {
-    throw new Error('Caminho de upload inválido.')
+    throw new Error('Caminho de upload invalido.')
   }
   ensureDir(resolvedDir)
   const filename = `${Date.now()}.${ext}`
@@ -63,7 +74,7 @@ function saveLocally(buffer: Buffer, folder: string, detectedMime: string): stri
   return `/uploads/${safeFolder}/${filename}`
 }
 
-// Cache de imagens para PDFs: evita re-descarregar a mesma foto em gerações consecutivas
+// Cache de imagens para PDFs: evita re-descarregar a mesma foto em geracoes consecutivas
 const _pdfImageCache = new Map<string, { data: string; expires: number }>()
 const _CACHE_TTL = 15 * 60 * 1000 // 15 minutos
 const _CACHE_MAX = 100
@@ -83,7 +94,7 @@ function _setCached(url: string, data: string): void {
   _pdfImageCache.set(url, { data, expires: Date.now() + _CACHE_TTL })
 }
 
-// Para URLs do Cloudinary, pede versão reduzida (300×300) que descarrega muito mais rápido
+// Para URLs do Cloudinary, pede versao reduzida (300x300) que descarrega muito mais rapido
 function _cloudinaryThumb(url: string): string {
   if (!url.includes('res.cloudinary.com')) return url
   return url.replace('/upload/', '/upload/w_300,h_300,c_fill,f_jpg,q_75/')
@@ -91,8 +102,8 @@ function _cloudinaryThumb(url: string): string {
 
 /**
  * Converte qualquer URL de imagem para data URI que o Puppeteer consegue renderizar.
- * URLs externas (Cloudinary) são redimensionadas e cacheadas em memória.
- * URLs locais são lidas do disco.
+ * URLs externas (Cloudinary) sao redimensionadas e cacheadas em memoria.
+ * URLs locais sao lidas do disco.
  * Protegido contra path traversal.
  */
 export async function resolveImageForPuppeteer(url: string | null | undefined): Promise<string | null> {
@@ -129,12 +140,10 @@ export async function resolveImageForPuppeteer(url: string | null | undefined): 
   return `data:${mimeType};base64,${buffer.toString('base64')}`
 }
 
-// Offset entre o relógio do sistema e o UTC real (em ms).
-// Corrigido automaticamente ao receber erro "Stale request" do Cloudinary.
+// Offset entre o relogio do sistema e o UTC real (em ms).
 let clockOffsetMs = 0
 
 export async function calibrateClockOffset(): Promise<void> {
-  // Tenta várias fontes de tempo em sequência
   const sources: Array<() => Promise<number>> = [
     async () => {
       const res = await fetch('https://worldtimeapi.org/api/timezone/UTC', { signal: AbortSignal.timeout(4000) })
@@ -147,7 +156,6 @@ export async function calibrateClockOffset(): Promise<void> {
       return new Date(d.dateTime + 'Z').getTime()
     },
     async () => {
-      // Usa o header Date de qualquer resposta HTTPS — funciona mesmo com Cloudinary
       const res = await fetch('https://api.cloudinary.com/', { method: 'HEAD', signal: AbortSignal.timeout(4000) })
       const dateHeader = res.headers.get('date')
       if (!dateHeader) throw new Error('sem Date header')
@@ -162,29 +170,25 @@ export async function calibrateClockOffset(): Promise<void> {
       const after = Date.now()
       clockOffsetMs = realUtc - Math.round((before + after) / 2)
       if (Math.abs(clockOffsetMs) > 5000) {
-        console.warn(`[cloudinary] clock offset: ${Math.round(clockOffsetMs / 1000)}s — timestamps corrigidos`)
+        console.warn(`[cloudinary] clock offset: ${Math.round(clockOffsetMs / 1000)}s`)
       }
       return
-    } catch { /* tenta próxima fonte */ }
+    } catch { /* tenta proxima fonte */ }
   }
-  console.warn('[cloudinary] calibração falhou em todas as fontes — a usar relógio do sistema')
+  console.warn('[cloudinary] calibracao falhou em todas as fontes')
 }
 
 function getRealTimestampSeconds(): number {
   return Math.round((Date.now() + clockOffsetMs) / 1000)
 }
 
-// Extrai o timestamp enviado da mensagem de erro "Stale request"
-// e auto-corrige o offset para uploads futuros.
 function handleStaleRequest(errorMessage: string): number | null {
   const match = errorMessage.match(/reported time is (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/)
   if (!match) return null
   const ourSentMs = new Date(match[1] + ' +0000').getTime()
-  // O Cloudinary exige que o timestamp esteja a menos de 1h do UTC real.
-  // Adicionamos 61 minutos ao timestamp que enviámos para ficar dentro da janela.
   const correctedMs = ourSentMs + 61 * 60 * 1000
   clockOffsetMs = correctedMs - Date.now()
-  console.warn(`[cloudinary] Stale request — offset auto-corrigido para ${Math.round(clockOffsetMs / 1000)}s`)
+  console.warn(`[cloudinary] Stale request -- offset auto-corrigido para ${Math.round(clockOffsetMs / 1000)}s`)
   return Math.round(correctedMs / 1000)
 }
 
@@ -228,9 +232,7 @@ export async function uploadToCloudinary(buffer: Buffer, folder: string): Promis
   return saveLocally(buffer, folder, detectedMime)
 }
 
-// Para comprovantes de pagamento — aceita imagens e PDF, sempre guarda localmente.
-// Cloudinary raw resources retornam 401 de forma inconsistente nesta conta;
-// o Express serve /uploads directamente e é mais fiável.
+// Para comprovantes de pagamento -- aceita imagens e PDF, sempre guarda localmente.
 export async function uploadDocumentToCloudinary(buffer: Buffer, folder: string): Promise<string> {
   const detectedMime = validateDocumentBuffer(buffer)
   return saveLocally(buffer, folder, detectedMime)
